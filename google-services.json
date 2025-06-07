@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "696696626947",
+    "project_id": "serveez-24522",
+    "storage_bucket": "serveez-24522.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:696696626947:android:392803a7c59dcc48c7d336",
+        "android_client_info": {
+          "package_name": "com.webinnovation.serveez"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDcXdBsbehsIwzv57ZqQWGvgGOhVg-tSlY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
