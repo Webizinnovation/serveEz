@@ -1,7 +1,9 @@
-const { getDefaultConfig } = require('expo/metro-config');
+const {
+  getSentryExpoConfig
+} = require("@sentry/react-native/metro");
 
 /** @type {import('expo/metro-config').MetroConfig} */
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
 // Temporary workaround for the "stream" / Node core-module error with ws
 config.resolver.unstable_enablePackageExports = false;
@@ -18,4 +20,4 @@ config.resolver = {
   sourceExts: [...config.resolver.sourceExts, 'svg'],
 };
 
-module.exports = config; 
+module.exports = config;

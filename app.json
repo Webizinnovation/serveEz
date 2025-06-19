@@ -12,7 +12,6 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.webinnovation.serveez",
       "associatedDomains": [
-        "applinks:njkllbogrrqwxxgmsmyr.supabase.co",
         "applinks:njkllbogrrqwxxgmsmyr.supabase.co"
       ],
       "icon": {
@@ -90,11 +89,22 @@
         {
           "icon": "./assets/images/adaptive-icon.png",
           "color": "#ffffff",
-          "sounds": ["./assets/sounds/notification.wav"],
+          "sounds": [
+            "./assets/sounds/notification.wav"
+          ],
           "defaultChannel": "default",
           "enableBackgroundRemoteNotifications": true
         }
-      ]
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "serveez",
+          "organization": "serveez"
+        }
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

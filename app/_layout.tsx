@@ -14,18 +14,35 @@ import { DarkTheme, DefaultTheme } from '@react-navigation/native';
 import FontProvider from '../components/FontProvider';
 import { configurePushNotifications } from '../services/pushNotifications';
 // import NavigationLoader from '../components/common/NavigationLoader';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://ef8b7d85db0a678da637dd0d3c6e87ec@o4509498758660096.ingest.de.sentry.io/4509498887372880',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Configure Session Replay
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 
 configurePushNotifications();
 
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   const authState = useAuth();
   const { isInitialized, user, session } = authState;
   const { profile } = useUserStore();
   const isAuthenticated = !!session;
-  const isPhoneVerified = true; // Temporarily bypass phone verification
+  const isPhoneVerified = profile?.phone_verified || false;
   const fadeAnim = React.useRef(new Animated.Value(0.3)).current;
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -310,7 +327,6 @@ export default function RootLayout() {
       
       try {
         if (isAuthenticated) {
-          /* Temporarily disabled phone verification
           if (!isPhoneVerified && !currentlyVerifyingOTP) {
             if (profile && profile.phone) {
               const targetPath = '/(auth)/verify-otp';
@@ -322,7 +338,6 @@ export default function RootLayout() {
             }
             return;
           }
-          */
 
           if (isPhoneVerified && (inAuthGroup || inOnboardingGroup)) {
             safeNavigate('/(tabs)');
@@ -631,4 +646,4 @@ export default function RootLayout() {
       </ThemeProvider>
     </FontProvider>
   );
-}
+});

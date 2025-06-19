@@ -134,6 +134,7 @@ export interface UserProfile {
   role: 'user' | 'provider';
   profile_pic?: string;
   phone?: string;
+  phone_verified?: boolean;
   services?: string[];
   location?: {
     region: string;

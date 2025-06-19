@@ -188,10 +188,7 @@ class TermiiXHRService {
                 
                 if (xhr.status >= 200 && xhr.status < 300) {
                   // Check if the verification was successful based on response
-                  if (response.verified === true || response.status === 'success' || 
-                      (response.data && response.data.verified === true) ||
-                      (typeof response.pinId !== 'undefined') || 
-                      (response.verified === "true")) {
+                  if (response.verified === true || response.verified === "true") {
                     console.log('[TermiiXHRService] API verification successful');
                     resolveXhr(true);
                   } else {

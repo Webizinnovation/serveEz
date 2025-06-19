@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, TextInput, FlatList, StyleSheet, TouchableOpacity, Image, Text, ActivityIndicator, Animated, Easing, Dimensions, Platform, AppState, AppStateStatus } from 'react-native';
+import { View, TextInput, FlatList, StyleSheet, TouchableOpacity, Image, Text, ActivityIndicator, Animated, Easing, Dimensions, Platform, AppState, AppStateStatus, KeyboardAvoidingView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from '../../services/supabase';
 import { useUserStore } from '../../store/useUserStore';
@@ -1571,30 +1571,35 @@ export default function ProviderChatRoom() {
       ]}>
         {renderHeader()}
         {renderSecurityWarning()}
-        <View style={[
-          styles.chatBackground, 
-          isDark && { backgroundColor: colors.cardBackground }
-        ]}>
-          {renderLoading()}
-          <FlatList
-            ref={flatListRef}
-            data={messagesData}
-            inverted
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            contentContainerStyle={styles.messagesList}
-            onEndReached={handleLoadMore}
-            ListFooterComponent={isLoading && hasMore ? (
-              <ActivityIndicator 
-                size="small" 
-                color={isDark ? colors.tint : Colors.primary} 
-                style={styles.loadingMore} 
-              />
-            ) : null}
-            {...listConfig}
-          />
-        </View>
-        {renderInputBar()}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={[
+            styles.chatBackground, 
+            isDark && { backgroundColor: colors.cardBackground }
+          ]}>
+            {renderLoading()}
+            <FlatList
+              ref={flatListRef}
+              data={messagesData}
+              inverted
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              contentContainerStyle={styles.messagesList}
+              onEndReached={handleLoadMore}
+              ListFooterComponent={isLoading && hasMore ? (
+                <ActivityIndicator 
+                  size="small" 
+                  color={isDark ? colors.tint : Colors.primary} 
+                  style={styles.loadingMore} 
+                />
+              ) : null}
+              {...listConfig}
+            />
+          </View>
+          {renderInputBar()}
+        </KeyboardAvoidingView>
       </View>
     </GestureHandlerRootView>
   );

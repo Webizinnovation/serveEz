@@ -69,7 +69,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         profile: {
           ...profile,
           wallet_balance: profile.wallets?.balance || 0,
-          phone_verified: true
+          phone_verified: profile.phone_verified || false,
         },
         isAuthenticated: true 
       });
@@ -118,7 +118,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         profile: {
           ...updatedProfile,
           wallet_balance: updatedProfile.wallets?.balance || 0,
-          phone_verified: true
+          phone_verified: updatedProfile.phone_verified
         }
       });
     } catch (error) {

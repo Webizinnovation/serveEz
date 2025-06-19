@@ -327,52 +327,25 @@ export default function VerifyOTP() {
       try {
         console.log('[VerifyOTP] Updating phone_verified status for user:', userId);
         
-        // Make sure we're authenticated before trying to update
-        const { data: session } = await supabase.auth.getSession();
-        if (!session?.session) {
-          console.warn('[VerifyOTP] No active session found, attempting to get session');
-          
-          // If no active session but we have credentials, try to sign in first
-          const credentials = await getUserCredentials(userId);
-          if (credentials) {
-            console.log('[VerifyOTP] Found credentials, attempting to sign in');
-            await supabase.auth.signInWithPassword({
-              email: credentials.email,
-              password: credentials.password
-            });
-          } else {
-            console.error('[VerifyOTP] No credentials found and no active session');
-          }
+        const { data: verifyResult, error: verifyError } = await supabase
+          .rpc('verify_phone_number', {
+            user_id: userId
+          });
+
+        if (verifyError) {
+          console.error('[VerifyOTP] Error updating phone verification status:', verifyError);
+          Toast.show({
+            type: 'error',
+            text1: 'Verification Failed',
+            text2: 'Could not update your verification status. Please contact support.',
+            position: 'top',
+            visibilityTime: 4000,
+          });
+          setLoading(false);
+          return;
         }
-        
-        // Direct update of phone_verified field - this works because of our RLS policy
-        const { data: updateResult, error: updateError } = await supabase
-          .from('users')
-          .update({ 
-            phone_verified: true,
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', userId)
-          .select('phone_verified');
-        
-        if (updateError) {
-          console.error('[VerifyOTP] Error updating phone verification status:', updateError);
-          
-          // Try using database functions as backup approach
-          console.log('[VerifyOTP] Trying database function as backup...');
-          const { data: verifyResult, error: verifyError } = await supabase
-            .rpc('verify_user_phone', {
-              user_id: userId
-            });
-            
-          if (verifyError) {
-            console.error('[VerifyOTP] Error with backup verification method:', verifyError);
-          } else {
-            console.log('[VerifyOTP] Backup verification result:', verifyResult);
-          }
-        } else {
-          console.log('[VerifyOTP] Phone verification update successful:', updateResult);
-        }
+
+        console.log('[VerifyOTP] Phone verification update successful:', verifyResult);
         
         // Always refresh the profile to ensure UI is updated correctly
         try {

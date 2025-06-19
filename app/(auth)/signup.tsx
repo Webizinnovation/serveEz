@@ -8,6 +8,8 @@ import {
   ScrollView,
   Dimensions,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
   useColorScheme,
   useWindowDimensions
 } from 'react-native';
@@ -28,7 +30,6 @@ import { registerForPushNotifications, sendSignupSuccessNotification } from '../
 
 const { width } = Dimensions.get('window');
 
-// Simplified country and states list with proper typing
 const countries: { [key: string]: string[] } = {
   Nigeria: [
     'Abuja',
@@ -37,10 +38,9 @@ const countries: { [key: string]: string[] } = {
   ],
 };
 
-// Define a type for service categories
 type ServiceCategory = {
   name: string;
-  subcategories?: string[]; // Optional subcategories
+  subcategories?: string[]; 
 };
 
 export default function Signup() {
@@ -48,7 +48,6 @@ export default function Signup() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
-  // Define theme colors based on system preference
   const colors = {
     background: isDark ? '#121212' : Colors.primary,
     cardBackground: isDark ? '#1E1E1E' : 'white',
@@ -81,11 +80,8 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [serviceSearch, setServiceSearch] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
-  
-  // Add error visibility state
   const [showErrors, setShowErrors] = useState(false);
 
-  // Add password validation states
   const [passwordCriteria, setPasswordCriteria] = useState({
     hasLength: false,
     hasUppercase: false,
@@ -94,7 +90,6 @@ export default function Signup() {
     isValid: false
   });
 
-  // Toast helper function
   const showToast = (type: string, message: string) => {
     Toast.show({
       type: type,
@@ -173,7 +168,6 @@ export default function Signup() {
     { name: "Event Caterer" },
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  // Function to check password criteria in real-time
   const checkPasswordCriteria = (password: string) => {
     setPasswordCriteria({
       hasLength: password.length >= 8,
@@ -187,14 +181,12 @@ export default function Signup() {
     });
   };
 
-  // Update the password change handler to check criteria
   const handlePasswordChange = (text: string) => {
     setForm(prev => ({ ...prev, password: text }));
     checkPasswordCriteria(text);
   };
 
   const validateInput = () => {
-    // Reset error visibility
     setShowErrors(false);
 
     if (form.username.trim() === '') {
@@ -341,7 +333,7 @@ export default function Signup() {
         }
         
         console.error('Error signing up:', signUpError);
-        Alert.alert('Error', signUpError.message);
+        showToast('error', signUpError.message || 'An unexpected error occurred.');
         setLoading(false);
         return;
       }
@@ -350,7 +342,7 @@ export default function Signup() {
       
       if (!authData?.user?.id) {
         console.error('No user ID returned from signup');
-        Alert.alert('Error', 'Failed to create account. Please try again.');
+        showToast('error', 'Failed to create account. Please try again.');
         setLoading(false);
         return;
       }
@@ -386,11 +378,7 @@ export default function Signup() {
           await supabase.auth.signOut();
           
           // Show an error message to the user
-          Alert.alert(
-            'Account Creation Failed', 
-            'We could not complete your registration. This email may already be registered.',
-            [{ text: 'OK' }]
-          );
+          showToast('error', 'Account Creation Failed. This email may already be registered.');
           setLoading(false);
           return; // Exit the function early
         } catch (cleanupError) {
@@ -513,7 +501,7 @@ export default function Signup() {
       await sendSignupSuccessNotification(form.username);
     } catch (error: any) { // Catch errors from signup, profile insert, provider insert, OR the OTP call
       console.error('Error during signup process:', error);
-      Alert.alert('Signup Error', error.message || 'An unexpected error occurred. Please try again.');
+      showToast('error', error.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -617,817 +605,822 @@ export default function Signup() {
   return (
     <>
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.background : Colors.primary }]}>
-      <ScrollView>
-        <StatusBar backgroundColor={isDark ? colors.background : Colors.primary} barStyle="light-content" />
-        <Link href="/(auth)/login" style={styles.backLink}>
-          <AntDesign name="left" size={24} color={isDark ? colors.text : "white"} />
-        </Link>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView>
+          <StatusBar backgroundColor={isDark ? colors.background : Colors.primary} barStyle="light-content" />
+          <Link href="/(auth)/login" style={styles.backLink}>
+            <AntDesign name="left" size={24} color={isDark ? colors.text : "white"} />
+          </Link>
 
-        <View style={[styles.header, { backgroundColor: isDark ? colors.background : Colors.primary }]}>
-          <Animated.View
-            entering={FadeInDown.duration(800).springify()}
-            style={styles.logoContainer}
-          >
-            <Logo width={77} height={77} style={[styles.logo, { 
-              backgroundColor: isDark ? colors.cardBackground : "white",
-              shadowColor: "#000",
-              shadowOffset: {
-                width: 0,
-                height: 4,
-              },
-              shadowOpacity: 0.2,
-              shadowRadius: 5,
-              elevation: 8,
-            }]} />
-            <Text style={[styles.description, { color: isDark ? colors.text : "white" }]}>
-              Join 750+ professionals in providing services and meeting needs near you.
-            </Text>
+          <View style={[styles.header, { backgroundColor: isDark ? colors.background : Colors.primary }]}>
             <Animated.View
-              entering={FadeInDown.delay(200).duration(800).springify()}
-              style={styles.roleSelector}
+              entering={FadeInDown.duration(800).springify()}
+              style={styles.logoContainer}
             >
-              <TouchableOpacity
-                style={[
-                  styles.roleButton, 
-                  role === 'user' && [
-                    styles.activeRole, 
-                    { backgroundColor: isDark ? colors.cardBackground : 'white' }
-                  ]
-                ]}
-                onPress={() => setRole('user')}
-              >
-                <Ionicons 
-                  name="person" 
-                  size={16} 
-                  color={role === 'user' ? 
-                    (isDark ? colors.tint : Colors.primary) : 
-                    (isDark ? colors.text : 'white')} 
-                  style={styles.roleIcon}
-                />
-                <Text 
-                  style={[
-                    styles.roleText, 
-                    { color: isDark ? colors.text : 'white' },
-                    role === 'user' && [
-                      styles.activeRoleText, 
-                      { color: isDark ? colors.tint : Colors.primary }
-                    ]
-                  ]}
-                >
-                  User
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton, 
-                  role === 'provider' && [
-                    styles.activeRole, 
-                    { backgroundColor: isDark ? colors.cardBackground : 'white' }
-                  ]
-                ]}
-                onPress={() => setRole('provider')}
-              >
-                <MaterialCommunityIcons 
-                  name="briefcase-outline" 
-                  size={16}
-                  color={role === 'provider' ? 
-                    (isDark ? colors.tint : Colors.primary) : 
-                    (isDark ? colors.text : 'white')}
-                  style={styles.roleIcon}
-                />
-                <Text 
-                  style={[
-                    styles.roleText, 
-                    { color: isDark ? colors.text : 'white' },
-                    role === 'provider' && [
-                      styles.activeRoleText, 
-                      { color: isDark ? colors.tint : Colors.primary }
-                    ]
-                  ]}
-                >
-                  Provider
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </Animated.View>
-        </View>
-
-        <View style={[styles.formContainer, { 
-          backgroundColor: isDark ? colors.cardBackground : '#fff',
-          shadowColor: "#000",
-          shadowOffset: {
-            width: 0,
-            height: -2,
-          },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 5,
-        }]}>
-          <Animated.Text
-            entering={FadeInDown.duration(800).springify()}
-            style={[styles.title, { color: isDark ? colors.text : "rgba(0,0,0,0.78)" }]}
-          >
-            To create a {role} account, <Ionicons name="rocket" size={24} color={isDark ? "#F58220" : "#FF7675"} />
-          </Animated.Text>
-          <Text style={[styles.subtitle, { color: isDark ? colors.subtext : '#666' }]}>
-            Fill in your accurate details below.
-          </Text>
-
-          {/* Common Fields */}
-          <Animated.View 
-            entering={FadeInRight.delay(200).duration(800).springify()}
-            style={styles.inputGroup}
-          >
-            <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Username</Text>
-            <View style={[styles.inputContainer, { 
-              backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-              borderWidth: 1,
-              borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
-            }]}>
-              <Ionicons 
-                name="person-circle-outline" 
-                size={20} 
-                color={isDark ? colors.subtext : "#666"} 
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                  color: isDark ? "white" : '#000'
-                }]}
-                placeholder="Enter your username"
-                placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
-                value={form.username}
-                onChangeText={(text) => setForm(prev => ({ ...prev, username: text }))}
-                autoComplete="username"
-                textContentType="username"
-                inputAccessoryViewID="username"
-                disableFullscreenUI={true}
-              />
-            </View>
-          </Animated.View>
-
-          {/* Email field */}
-          <Animated.View 
-            entering={FadeInRight.delay(300).duration(800).springify()}
-            style={styles.inputGroup}
-          >
-            <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Email</Text>
-            <View style={[styles.inputContainer, { 
-              backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-              borderWidth: 1,
-              borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
-            }]}>
-              <MaterialCommunityIcons 
-                name="email-outline" 
-                size={20} 
-                color={isDark ? colors.subtext : "#666"} 
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                  color: isDark ? "white" : '#000'
-                }]}
-                placeholder="Enter your email"
-                placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
-                value={form.email}
-                onChangeText={(text) => setForm(prev => ({ ...prev, email: text }))}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                textContentType="emailAddress"
-                inputAccessoryViewID="email"
-                disableFullscreenUI={true}
-              />
-            </View>
-          </Animated.View>
-
-          {/* Phone field */}
-          <Animated.View 
-            entering={FadeInRight.delay(400).duration(800).springify()}
-            style={styles.inputGroup}
-          >
-            <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Phone</Text>
-            <View style={[styles.inputContainer, { 
-              backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-              borderWidth: 1,
-              borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
-            }]}>
-              <Feather 
-                name="phone" 
-                size={20} 
-                color={isDark ? colors.subtext : "#666"} 
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                  color: isDark ? "white" : '#000'
-                }]}
-                placeholder="+234"
-                placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
-                value={form.phone}
-                onChangeText={(text) => setForm(prev => ({ ...prev, phone: text }))}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-                textContentType="telephoneNumber"
-                inputAccessoryViewID="phone"
-                disableFullscreenUI={true}
-              />
-            </View>
-          </Animated.View>
-
-          {/* Password field */}
-          <Animated.View 
-            entering={FadeInRight.delay(500).duration(800).springify()}
-            style={styles.inputGroup}
-          >
-            <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Password</Text>
-            <View style={[styles.passwordContainer, { 
-              backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-              borderWidth: 1,
-              borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
-            }]}>
-              <Ionicons 
-                name="lock-closed-outline" 
-                size={20} 
-                color={isDark ? colors.subtext : "#666"} 
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, styles.passwordInput, { 
-                  backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                  color: isDark ? "white" : '#000'
-                }]}
-                placeholder="Enter your password"
-                placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
-                value={form.password}
-                onChangeText={handlePasswordChange}
-                secureTextEntry={!showPassword}
-                autoComplete="password-new"
-                textContentType="newPassword"
-                inputAccessoryViewID="password"
-                disableFullscreenUI={true}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <FontAwesome 
-                  name={showPassword ? "eye" : "eye-slash"} 
-                  size={20} 
-                  color={isDark ? colors.subtext : "gray"} 
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Password criteria indicators */}
-            {form.password.length > 0 && (
-              <View style={{marginTop: 15}}>
-                <View style={{flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 10}}>
-                  <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}>
-                    <View style={[
-                      {
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginRight: 8,
-                        backgroundColor: passwordCriteria.hasLength ? 
-                          '#4CAF50' : isDark ? colors.secondaryBackground : '#D9D9D9'
-                      }
-                    ]}>
-                      {passwordCriteria.hasLength && (
-                        <AntDesign name="check" size={12} color="white" />
-                      )}
-                    </View>
-                    <Text style={[
-                      {
-                        fontFamily: 'Urbanist-Medium',
-                        fontSize: 14,
-                        color: isDark ? colors.text : '#333'
-                      }
-                    ]}>8+ characters</Text>
-                  </View>
-                  
-                  <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}>
-                    <View style={[
-                      {
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginRight: 8,
-                        backgroundColor: passwordCriteria.hasUppercase ? 
-                          '#4CAF50' : isDark ? colors.secondaryBackground : '#D9D9D9'
-                      }
-                    ]}>
-                      {passwordCriteria.hasUppercase && (
-                        <AntDesign name="check" size={12} color="white" />
-                      )}
-                    </View>
-                    <Text style={[
-                      {
-                        fontFamily: 'Urbanist-Medium',
-                        fontSize: 14,
-                        color: isDark ? colors.text : '#333'
-                      }
-                    ]}>Uppercase letter</Text>
-                  </View>
-                </View>
-
-                <View style={{flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 10}}>
-                  <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}>
-                    <View style={[
-                      {
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginRight: 8,
-                        backgroundColor: passwordCriteria.hasLowercase ? 
-                          '#4CAF50' : isDark ? colors.secondaryBackground : '#D9D9D9'
-                      }
-                    ]}>
-                      {passwordCriteria.hasLowercase && (
-                        <AntDesign name="check" size={12} color="white" />
-                      )}
-                    </View>
-                    <Text style={[
-                      {
-                        fontFamily: 'Urbanist-Medium',
-                        fontSize: 14,
-                        color: isDark ? colors.text : '#333'
-                      }
-                    ]}>Lowercase letter</Text>
-                  </View>
-                  
-                  <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}>
-                    <View style={[
-                      {
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginRight: 8,
-                        backgroundColor: passwordCriteria.hasNumber ? 
-                          '#4CAF50' : isDark ? colors.secondaryBackground : '#D9D9D9'
-                      }
-                    ]}>
-                      {passwordCriteria.hasNumber && (
-                        <AntDesign name="check" size={12} color="white" />
-                      )}
-                    </View>
-                    <Text style={[
-                      {
-                        fontFamily: 'Urbanist-Medium',
-                        fontSize: 14,
-                        color: isDark ? colors.text : '#333'
-                      }
-                    ]}>Number</Text>
-                  </View>
-                </View>
-              </View>
-            )}
-          </Animated.View>
-
-          {/* Confirm Password field */}
-          <Animated.View 
-            entering={FadeInRight.delay(600).duration(800).springify()}
-            style={styles.inputGroup}
-          >
-            <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Confirm Password</Text>
-            <View style={[styles.passwordContainer, { 
-              backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-              borderWidth: 1,
-              borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
-            }]}>
-              <Ionicons 
-                name="shield-checkmark-outline" 
-                size={20} 
-                color={isDark ? colors.subtext : "#666"} 
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, styles.passwordInput, { 
-                  backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                  color: isDark ? "white" : '#000'
-                }]}
-                placeholder="Confirm your password"
-                placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
-                value={form.confirmPassword}
-                onChangeText={(text) => setForm(prev => ({ ...prev, confirmPassword: text }))}
-                secureTextEntry={!showConfirmPassword}
-                autoComplete="password-new"
-                textContentType="newPassword"
-                inputAccessoryViewID="confirmPassword"
-                disableFullscreenUI={true}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                <FontAwesome 
-                  name={showConfirmPassword ? "eye" : "eye-slash"} 
-                  size={20} 
-                  color={isDark ? colors.subtext : "gray"} 
-                />
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-
-          {/* Country field */}
-          <Animated.View 
-            entering={FadeInRight.delay(700).duration(800).springify()}
-            style={styles.inputGroup}
-          >
-            <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Country</Text>
-            <TouchableOpacity 
-              style={[styles.inputContainer, { 
-                backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                borderWidth: 1,
-                borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)',
-              }]} 
-              onPress={() => setShowCountryModal(true)}
-            >
-              <Ionicons 
-                name="earth" 
-                size={20} 
-                color={isDark ? colors.subtext : "#666"} 
-                style={styles.inputIcon}
-              />
-              <Text style={[styles.pickerText, { color: isDark ? "white" : '#666' }]}>
-                {selectedCountry || "Select a country"}
+              <Logo width={77} height={77} style={[styles.logo, { 
+                backgroundColor: isDark ? colors.cardBackground : "white",
+                shadowColor: "#000",
+                shadowOffset: {
+                  width: 0,
+                  height: 4,
+                },
+                shadowOpacity: 0.2,
+                shadowRadius: 5,
+                elevation: 8,
+              }]} />
+              <Text style={[styles.description, { color: isDark ? colors.text : "white" }]}>
+                Join 750+ professionals in providing services and meeting needs near you.
               </Text>
-              <AntDesign name="down" size={16} color={isDark ? colors.subtext : "#666"} style={{ position: 'absolute', right: 15 }} />
-            </TouchableOpacity>
-          </Animated.View>
+              <Animated.View
+                entering={FadeInDown.delay(200).duration(800).springify()}
+                style={styles.roleSelector}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton, 
+                    role === 'user' && [
+                      styles.activeRole, 
+                      { backgroundColor: isDark ? colors.cardBackground : 'white' }
+                    ]
+                  ]}
+                  onPress={() => setRole('user')}
+                >
+                  <Ionicons 
+                    name="person" 
+                    size={16} 
+                    color={role === 'user' ? 
+                      (isDark ? colors.tint : Colors.primary) : 
+                      (isDark ? colors.text : 'white')} 
+                    style={styles.roleIcon}
+                  />
+                  <Text 
+                    style={[
+                      styles.roleText, 
+                      { color: isDark ? colors.text : 'white' },
+                      role === 'user' && [
+                        styles.activeRoleText, 
+                        { color: isDark ? colors.tint : Colors.primary }
+                      ]
+                    ]}
+                  >
+                    User
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton, 
+                    role === 'provider' && [
+                      styles.activeRole, 
+                      { backgroundColor: isDark ? colors.cardBackground : 'white' }
+                    ]
+                  ]}
+                  onPress={() => setRole('provider')}
+                >
+                  <MaterialCommunityIcons 
+                    name="briefcase-outline" 
+                    size={16}
+                    color={role === 'provider' ? 
+                      (isDark ? colors.tint : Colors.primary) : 
+                      (isDark ? colors.text : 'white')}
+                    style={styles.roleIcon}
+                  />
+                  <Text 
+                    style={[
+                      styles.roleText, 
+                      { color: isDark ? colors.text : 'white' },
+                      role === 'provider' && [
+                        styles.activeRoleText, 
+                        { color: isDark ? colors.tint : Colors.primary }
+                      ]
+                    ]}
+                  >
+                    Provider
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+            </Animated.View>
+          </View>
 
-          {selectedCountry && (
+          <View style={[styles.formContainer, { 
+            backgroundColor: isDark ? colors.cardBackground : '#fff',
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: -2,
+            },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 5,
+          }]}>
+            <Animated.Text
+              entering={FadeInDown.duration(800).springify()}
+              style={[styles.title, { color: isDark ? colors.text : "rgba(0,0,0,0.78)" }]}
+            >
+              To create a {role} account, <Ionicons name="rocket" size={24} color={isDark ? "#F58220" : "#FF7675"} />
+            </Animated.Text>
+            <Text style={[styles.subtitle, { color: isDark ? colors.subtext : '#666' }]}>
+              Fill in your accurate details below.
+            </Text>
+
+            {/* Common Fields */}
             <Animated.View 
-              entering={FadeInRight.delay(800).duration(800).springify()}
+              entering={FadeInRight.delay(200).duration(800).springify()}
               style={styles.inputGroup}
             >
-              <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>State</Text>
+              <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Username</Text>
+              <View style={[styles.inputContainer, { 
+                backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                borderWidth: 1,
+                borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+              }]}>
+                <Ionicons 
+                  name="person-circle-outline" 
+                  size={20} 
+                  color={isDark ? colors.subtext : "#666"} 
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                    color: isDark ? "white" : '#000'
+                  }]}
+                  placeholder="Enter your username"
+                  placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
+                  value={form.username}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, username: text }))}
+                  autoComplete="username"
+                  textContentType="username"
+                  inputAccessoryViewID="username"
+                  disableFullscreenUI={true}
+                />
+              </View>
+            </Animated.View>
+
+            {/* Email field */}
+            <Animated.View 
+              entering={FadeInRight.delay(300).duration(800).springify()}
+              style={styles.inputGroup}
+            >
+              <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Email</Text>
+              <View style={[styles.inputContainer, { 
+                backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                borderWidth: 1,
+                borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+              }]}>
+                <MaterialCommunityIcons 
+                  name="email-outline" 
+                  size={20} 
+                  color={isDark ? colors.subtext : "#666"} 
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                    color: isDark ? "white" : '#000'
+                  }]}
+                  placeholder="Enter your email"
+                  placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
+                  value={form.email}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, email: text }))}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  inputAccessoryViewID="email"
+                  disableFullscreenUI={true}
+                />
+              </View>
+            </Animated.View>
+
+            {/* Phone field */}
+            <Animated.View 
+              entering={FadeInRight.delay(400).duration(800).springify()}
+              style={styles.inputGroup}
+            >
+              <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Phone</Text>
+              <View style={[styles.inputContainer, { 
+                backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                borderWidth: 1,
+                borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+              }]}>
+                <Feather 
+                  name="phone" 
+                  size={20} 
+                  color={isDark ? colors.subtext : "#666"} 
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                    color: isDark ? "white" : '#000'
+                  }]}
+                  placeholder="+234"
+                  placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
+                  value={form.phone}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, phone: text }))}
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  textContentType="telephoneNumber"
+                  inputAccessoryViewID="phone"
+                  disableFullscreenUI={true}
+                />
+              </View>
+            </Animated.View>
+
+            {/* Password field */}
+            <Animated.View 
+              entering={FadeInRight.delay(500).duration(800).springify()}
+              style={styles.inputGroup}
+            >
+              <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Password</Text>
+              <View style={[styles.passwordContainer, { 
+                backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                borderWidth: 1,
+                borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+              }]}>
+                <Ionicons 
+                  name="lock-closed-outline" 
+                  size={20} 
+                  color={isDark ? colors.subtext : "#666"} 
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, styles.passwordInput, { 
+                    backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                    color: isDark ? "white" : '#000'
+                  }]}
+                  placeholder="Enter your password"
+                  placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
+                  value={form.password}
+                  onChangeText={handlePasswordChange}
+                  secureTextEntry={!showPassword}
+                  autoComplete="password-new"
+                  textContentType="newPassword"
+                  inputAccessoryViewID="password"
+                  disableFullscreenUI={true}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <FontAwesome 
+                    name={showPassword ? "eye" : "eye-slash"} 
+                    size={20} 
+                    color={isDark ? colors.subtext : "gray"} 
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Password criteria indicators */}
+              {form.password.length > 0 && (
+                <View style={{marginTop: 15}}>
+                  <View style={{flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 10}}>
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}>
+                      <View style={[
+                        {
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 8,
+                          backgroundColor: passwordCriteria.hasLength ? 
+                            '#4CAF50' : isDark ? colors.secondaryBackground : '#D9D9D9'
+                        }
+                      ]}>
+                        {passwordCriteria.hasLength && (
+                          <AntDesign name="check" size={12} color="white" />
+                        )}
+                      </View>
+                      <Text style={[
+                        {
+                          fontFamily: 'Urbanist-Medium',
+                          fontSize: 14,
+                          color: isDark ? colors.text : '#333'
+                        }
+                      ]}>8+ characters</Text>
+                    </View>
+                    
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}>
+                      <View style={[
+                        {
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 8,
+                          backgroundColor: passwordCriteria.hasUppercase ? 
+                            '#4CAF50' : isDark ? colors.secondaryBackground : '#D9D9D9'
+                        }
+                      ]}>
+                        {passwordCriteria.hasUppercase && (
+                          <AntDesign name="check" size={12} color="white" />
+                        )}
+                      </View>
+                      <Text style={[
+                        {
+                          fontFamily: 'Urbanist-Medium',
+                          fontSize: 14,
+                          color: isDark ? colors.text : '#333'
+                        }
+                      ]}>Uppercase letter</Text>
+                    </View>
+                  </View>
+
+                  <View style={{flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 10}}>
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}>
+                      <View style={[
+                        {
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 8,
+                          backgroundColor: passwordCriteria.hasLowercase ? 
+                            '#4CAF50' : isDark ? colors.secondaryBackground : '#D9D9D9'
+                        }
+                      ]}>
+                        {passwordCriteria.hasLowercase && (
+                          <AntDesign name="check" size={12} color="white" />
+                        )}
+                      </View>
+                      <Text style={[
+                        {
+                          fontFamily: 'Urbanist-Medium',
+                          fontSize: 14,
+                          color: isDark ? colors.text : '#333'
+                        }
+                      ]}>Lowercase letter</Text>
+                    </View>
+                    
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}>
+                      <View style={[
+                        {
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 8,
+                          backgroundColor: passwordCriteria.hasNumber ? 
+                            '#4CAF50' : isDark ? colors.secondaryBackground : '#D9D9D9'
+                        }
+                      ]}>
+                        {passwordCriteria.hasNumber && (
+                          <AntDesign name="check" size={12} color="white" />
+                        )}
+                      </View>
+                      <Text style={[
+                        {
+                          fontFamily: 'Urbanist-Medium',
+                          fontSize: 14,
+                          color: isDark ? colors.text : '#333'
+                        }
+                      ]}>Number</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </Animated.View>
+
+            {/* Confirm Password field */}
+            <Animated.View 
+              entering={FadeInRight.delay(600).duration(800).springify()}
+              style={styles.inputGroup}
+            >
+              <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Confirm Password</Text>
+              <View style={[styles.passwordContainer, { 
+                backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                borderWidth: 1,
+                borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+              }]}>
+                <Ionicons 
+                  name="shield-checkmark-outline" 
+                  size={20} 
+                  color={isDark ? colors.subtext : "#666"} 
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, styles.passwordInput, { 
+                    backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                    color: isDark ? "white" : '#000'
+                  }]}
+                  placeholder="Confirm your password"
+                  placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
+                  value={form.confirmPassword}
+                  onChangeText={(text) => setForm(prev => ({ ...prev, confirmPassword: text }))}
+                  secureTextEntry={!showConfirmPassword}
+                  autoComplete="password-new"
+                  textContentType="newPassword"
+                  inputAccessoryViewID="confirmPassword"
+                  disableFullscreenUI={true}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  <FontAwesome 
+                    name={showConfirmPassword ? "eye" : "eye-slash"} 
+                    size={20} 
+                    color={isDark ? colors.subtext : "gray"} 
+                  />
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+
+            {/* Country field */}
+            <Animated.View 
+              entering={FadeInRight.delay(700).duration(800).springify()}
+              style={styles.inputGroup}
+            >
+              <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Country</Text>
               <TouchableOpacity 
                 style={[styles.inputContainer, { 
                   backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
                   borderWidth: 1,
                   borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)',
                 }]} 
-                onPress={() => setShowStateModal(true)}
+                onPress={() => setShowCountryModal(true)}
               >
                 <Ionicons 
-                  name="location-outline" 
+                  name="earth" 
                   size={20} 
                   color={isDark ? colors.subtext : "#666"} 
                   style={styles.inputIcon}
                 />
                 <Text style={[styles.pickerText, { color: isDark ? "white" : '#666' }]}>
-                  {selectedState || "Select a state"}
+                  {selectedCountry || "Select a country"}
                 </Text>
                 <AntDesign name="down" size={16} color={isDark ? colors.subtext : "#666"} style={{ position: 'absolute', right: 15 }} />
               </TouchableOpacity>
             </Animated.View>
-          )}
 
-          {/* Provider-specific Fields */}
-          {role === 'provider' && (
-            <>
+            {selectedCountry && (
               <Animated.View 
-                entering={FadeInRight.delay(1100).duration(800).springify()}
+                entering={FadeInRight.delay(800).duration(800).springify()}
                 style={styles.inputGroup}
               >
-                <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Service</Text>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>State</Text>
                 <TouchableOpacity 
                   style={[styles.inputContainer, { 
                     backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
                     borderWidth: 1,
-                    borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+                    borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)',
                   }]} 
-                  onPress={() => setShowServiceModal(true)}
+                  onPress={() => setShowStateModal(true)}
                 >
-                  <MaterialCommunityIcons 
-                    name="briefcase-outline" 
+                  <Ionicons 
+                    name="location-outline" 
                     size={20} 
                     color={isDark ? colors.subtext : "#666"} 
                     style={styles.inputIcon}
                   />
                   <Text style={[styles.pickerText, { color: isDark ? "white" : '#666' }]}>
-                    {form.service || "Select a service"}
+                    {selectedState || "Select a state"}
                   </Text>
                   <AntDesign name="down" size={16} color={isDark ? colors.subtext : "#666"} style={{ position: 'absolute', right: 15 }} />
                 </TouchableOpacity>
               </Animated.View>
+            )}
 
-              <Modal
-                visible={showServiceModal}
-                animationType="slide"
-                transparent={true}
-              >
-                <View style={[styles.modalView, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)' }]}>
-                  <View style={[styles.modalContent, { 
-                    backgroundColor: isDark ? colors.cardBackground : 'white',
-                    borderRadius: 16,
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 3.84,
-                    elevation: 5,
-                  }]}>
-                    <View style={[styles.modalHeader, { 
+            {/* Provider-specific Fields */}
+            {role === 'provider' && (
+              <>
+                <Animated.View 
+                  entering={FadeInRight.delay(1100).duration(800).springify()}
+                  style={styles.inputGroup}
+                >
+                  <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Service</Text>
+                  <TouchableOpacity 
+                    style={[styles.inputContainer, { 
+                      backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                      borderWidth: 1,
+                      borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+                    }]} 
+                    onPress={() => setShowServiceModal(true)}
+                  >
+                    <MaterialCommunityIcons 
+                      name="briefcase-outline" 
+                      size={20} 
+                      color={isDark ? colors.subtext : "#666"} 
+                      style={styles.inputIcon}
+                    />
+                    <Text style={[styles.pickerText, { color: isDark ? "white" : '#666' }]}>
+                      {form.service || "Select a service"}
+                    </Text>
+                    <AntDesign name="down" size={16} color={isDark ? colors.subtext : "#666"} style={{ position: 'absolute', right: 15 }} />
+                  </TouchableOpacity>
+                </Animated.View>
+
+                <Modal
+                  visible={showServiceModal}
+                  animationType="slide"
+                  transparent={true}
+                >
+                  <View style={[styles.modalView, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)' }]}>
+                    <View style={[styles.modalContent, { 
                       backgroundColor: isDark ? colors.cardBackground : 'white',
-                      borderBottomWidth: 1,
-                      borderBottomColor: isDark ? colors.border : '#eee',
-                      borderTopLeftRadius: 16,
-                      borderTopRightRadius: 16
+                      borderRadius: 16,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 3.84,
+                      elevation: 5,
                     }]}>
-                      <Text style={[styles.modalTitle, { color: isDark ? colors.text : '#333' }]}>
-                        <MaterialCommunityIcons name="briefcase-outline" size={20} color={isDark ? colors.tint : '#00456C'} /> Select a Service
-                      </Text>
-                      <TouchableOpacity onPress={() => setShowServiceModal(false)}>
-                        <AntDesign name="close" size={24} color={isDark ? colors.text : '#333'} />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={[styles.searchContainer, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
-                      <View style={[styles.searchInputContainer, {
-                        backgroundColor: isDark ? colors.secondaryBackground : '#f5f5f5',
-                        borderRadius: 10,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingHorizontal: 10,
-                        margin: 10
+                      <View style={[styles.modalHeader, { 
+                        backgroundColor: isDark ? colors.cardBackground : 'white',
+                        borderBottomWidth: 1,
+                        borderBottomColor: isDark ? colors.border : '#eee',
+                        borderTopLeftRadius: 16,
+                        borderTopRightRadius: 16
                       }]}>
-                        <Feather name="search" size={18} color={isDark ? colors.subtext : "#999"} style={{ marginRight: 8 }} />
-                        <TextInput
-                          style={[styles.searchInput, { 
-                            backgroundColor: 'transparent',
-                            color: isDark ? "white" : '#333',
-                            flex: 1,
-                            height: 40,
-                            paddingRight: 10
-                          }]}
-                          placeholder="Search services..."
-                          placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "#999"}
-                          value={serviceSearch}
-                          onChangeText={setServiceSearch}
-                        />
-                        {serviceSearch.length > 0 && (
-                          <TouchableOpacity onPress={() => setServiceSearch('')}>
-                            <AntDesign name="close" size={16} color={isDark ? colors.subtext : "#999"} />
-                          </TouchableOpacity>
-                        )}
+                        <Text style={[styles.modalTitle, { color: isDark ? colors.text : '#333' }]}>
+                          <MaterialCommunityIcons name="briefcase-outline" size={20} color={isDark ? colors.tint : '#00456C'} /> Select a Service
+                        </Text>
+                        <TouchableOpacity onPress={() => setShowServiceModal(false)}>
+                          <AntDesign name="close" size={24} color={isDark ? colors.text : '#333'} />
+                        </TouchableOpacity>
                       </View>
-                    </View>
-                    <ScrollView style={[styles.modalScrollView, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
-                      {services
-                        .filter((serviceItem: ServiceCategory) => 
-                          serviceItem.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
-                          (serviceItem.subcategories?.some((sub: string) => 
-                            sub.toLowerCase().includes(serviceSearch.toLowerCase())) ?? false)
-                        )
-                        .map((serviceItem: ServiceCategory) => (
-                          <View key={serviceItem.name}>
-                            <TouchableOpacity
-                              style={[styles.modalItem, { 
-                                backgroundColor: isDark ? colors.cardBackground : 'white',
-                                borderBottomColor: isDark ? colors.border : '#eee',
-                                flexDirection: 'row',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                              }]}
-                              onPress={() => {
-                                setForm(prev => ({ ...prev, service: serviceItem.name }));
-                                setShowServiceModal(false);
-                                setServiceSearch('');
-                              }}
-                            >
-                              <Text style={[styles.modalItemText, { color: isDark ? colors.text : '#333' }]}>
-                                {serviceItem.name}
-                              </Text>
-                              {serviceItem.subcategories && serviceItem.subcategories.length > 0 && (
-                                <TouchableOpacity
-                                  onPress={(e) => toggleCategoryExpansion(serviceItem.name, e)}
-                                  style={{ padding: 8 }}
-                                >
-                                  <AntDesign 
-                                    name={expandedCategories.includes(serviceItem.name) ? "down" : "right"} 
-                                    size={16} 
-                                    color={isDark ? colors.subtext : "#999"} 
-                                  />
-                                </TouchableOpacity>
-                              )}
+                      <View style={[styles.searchContainer, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
+                        <View style={[styles.searchInputContainer, {
+                          backgroundColor: isDark ? colors.secondaryBackground : '#f5f5f5',
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingHorizontal: 10,
+                          margin: 10
+                        }]}>
+                          <Feather name="search" size={18} color={isDark ? colors.subtext : "#999"} style={{ marginRight: 8 }} />
+                          <TextInput
+                            style={[styles.searchInput, { 
+                              backgroundColor: 'transparent',
+                              color: isDark ? "white" : '#333',
+                              flex: 1,
+                              height: 40,
+                              paddingRight: 10
+                            }]}
+                            placeholder="Search services..."
+                            placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "#999"}
+                            value={serviceSearch}
+                            onChangeText={setServiceSearch}
+                          />
+                          {serviceSearch.length > 0 && (
+                            <TouchableOpacity onPress={() => setServiceSearch('')}>
+                              <AntDesign name="close" size={16} color={isDark ? colors.subtext : "#999"} />
                             </TouchableOpacity>
-                            
-                            {serviceItem.subcategories && expandedCategories.includes(serviceItem.name) &&
-                              serviceItem.subcategories.filter((subcat: string) => 
-                                !serviceSearch || subcat.toLowerCase().includes(serviceSearch.toLowerCase())
-                              ).map((subcategory: string, index: number) => (
-                                <TouchableOpacity
-                                  key={`${serviceItem.name}-${subcategory}-${index}`}
-                                  style={[styles.modalSubItem, { 
-                                    backgroundColor: isDark ? colors.secondaryBackground : '#f8f9fa',
-                                    borderBottomColor: isDark ? colors.border : '#eee' 
-                                  }]}
-                                  onPress={() => {
-                                    setForm(prev => ({ ...prev, service: `${serviceItem.name} - ${subcategory}` }));
-                                    setShowServiceModal(false);
-                                    setServiceSearch('');
-                                  }}
-                                >
-                                  <Text style={[styles.modalSubItemText, { color: isDark ? colors.subtext : '#666' }]}>
-                                    • {subcategory}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                          </View>
-                        ))}
-                    </ScrollView>
+                          )}
+                        </View>
+                      </View>
+                      <ScrollView style={[styles.modalScrollView, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
+                        {services
+                          .filter((serviceItem: ServiceCategory) => 
+                            serviceItem.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
+                            (serviceItem.subcategories?.some((sub: string) => 
+                              sub.toLowerCase().includes(serviceSearch.toLowerCase())) ?? false)
+                          )
+                          .map((serviceItem: ServiceCategory) => (
+                            <View key={serviceItem.name}>
+                              <TouchableOpacity
+                                style={[styles.modalItem, { 
+                                  backgroundColor: isDark ? colors.cardBackground : 'white',
+                                  borderBottomColor: isDark ? colors.border : '#eee',
+                                  flexDirection: 'row',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center'
+                                }]}
+                                onPress={() => {
+                                  setForm(prev => ({ ...prev, service: serviceItem.name }));
+                                  setShowServiceModal(false);
+                                  setServiceSearch('');
+                                }}
+                              >
+                                <Text style={[styles.modalItemText, { color: isDark ? colors.text : '#333' }]}>
+                                  {serviceItem.name}
+                                </Text>
+                                {serviceItem.subcategories && serviceItem.subcategories.length > 0 && (
+                                  <TouchableOpacity
+                                    onPress={(e) => toggleCategoryExpansion(serviceItem.name, e)}
+                                    style={{ padding: 8 }}
+                                  >
+                                    <AntDesign 
+                                      name={expandedCategories.includes(serviceItem.name) ? "down" : "right"} 
+                                      size={16} 
+                                      color={isDark ? colors.subtext : "#999"} 
+                                    />
+                                  </TouchableOpacity>
+                                )}
+                              </TouchableOpacity>
+                              
+                              {serviceItem.subcategories && expandedCategories.includes(serviceItem.name) &&
+                                serviceItem.subcategories.filter((subcat: string) => 
+                                  !serviceSearch || subcat.toLowerCase().includes(serviceSearch.toLowerCase())
+                                ).map((subcategory: string, index: number) => (
+                                  <TouchableOpacity
+                                    key={`${serviceItem.name}-${subcategory}-${index}`}
+                                    style={[styles.modalSubItem, { 
+                                      backgroundColor: isDark ? colors.secondaryBackground : '#f8f9fa',
+                                      borderBottomColor: isDark ? colors.border : '#eee' 
+                                    }]}
+                                    onPress={() => {
+                                      setForm(prev => ({ ...prev, service: `${serviceItem.name} - ${subcategory}` }));
+                                      setShowServiceModal(false);
+                                      setServiceSearch('');
+                                    }}
+                                  >
+                                    <Text style={[styles.modalSubItemText, { color: isDark ? colors.subtext : '#666' }]}>
+                                      • {subcategory}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                            </View>
+                          ))}
+                      </ScrollView>
+                    </View>
                   </View>
-                </View>
-              </Modal>
+                </Modal>
 
-              <Animated.View 
-                entering={FadeInRight.delay(1200).duration(800).springify()}
-                style={styles.inputGroup}
+                <Animated.View 
+                  entering={FadeInRight.delay(1200).duration(800).springify()}
+                  style={styles.inputGroup}
+                >
+                  <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Price</Text>
+                  <View style={[styles.inputContainer, { 
+                    backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                    borderWidth: 1,
+                    borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+                  }]}>
+                    <FontAwesome 
+                      name="dollar" 
+                      size={20} 
+                      color={isDark ? colors.subtext : "#666"} 
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={[styles.input, { color: isDark ? "white" : '#000' }]}
+                      placeholder="Enter your price"
+                      placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
+                      value={form.price}
+                      onChangeText={(text) => setForm(prev => ({ ...prev, price: text }))}
+                      keyboardType="numeric"
+                      inputAccessoryViewID="priceInput"
+                    />
+                  </View>
+                </Animated.View>
+              </>
+            )}
+
+            {/* Button section */}
+            <Animated.View entering={FadeInDown.delay(1000).duration(800).springify()}>
+              <Button 
+                mode="contained"
+                onPress={handleSignup}
+                loading={loading}
+                disabled={loading}
+                style={[styles.signupButton, { 
+                  backgroundColor: isDark ? colors.tint : "#00456C",
+                  borderRadius: 12,
+                  elevation: 4
+                }]}
+                contentStyle={styles.buttonContent}
+                icon={() => <Ionicons name="person-add-outline" size={20} color="white" />}
               >
-                <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Price</Text>
-                <View style={[styles.inputContainer, { 
-                  backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                  borderWidth: 1,
-                  borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
-                }]}>
-                  <FontAwesome 
-                    name="dollar" 
-                    size={20} 
-                    color={isDark ? colors.subtext : "#666"} 
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={[styles.input, { color: isDark ? "white" : '#000' }]}
-                    placeholder="Enter your price"
-                    placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "gray"}
-                    value={form.price}
-                    onChangeText={(text) => setForm(prev => ({ ...prev, price: text }))}
-                    keyboardType="numeric"
-                    inputAccessoryViewID="priceInput"
-                  />
-                </View>
-              </Animated.View>
-            </>
-          )}
+                {loading ? 'Creating Account...' : `Sign up as ${role === 'user' ? 'User' : 'Provider'}`}
+              </Button>
+            </Animated.View>
 
-          {/* Button section */}
-          <Animated.View entering={FadeInDown.delay(1000).duration(800).springify()}>
-            <Button 
-              mode="contained"
-              onPress={handleSignup}
-              loading={loading}
-              disabled={loading}
-              style={[styles.signupButton, { 
-                backgroundColor: isDark ? colors.tint : "#00456C",
-                borderRadius: 12,
-                elevation: 4
-              }]}
-              contentStyle={styles.buttonContent}
-              icon={() => <Ionicons name="person-add-outline" size={20} color="white" />}
-            >
-              {loading ? 'Creating Account...' : `Sign up as ${role === 'user' ? 'User' : 'Provider'}`}
-            </Button>
-          </Animated.View>
-
-          <Animated.View entering={FadeInDown.delay(1100).duration(800).springify()}>
-            <Text style={[styles.loginText, { color: isDark ? colors.subtext : '#666' }]}>
-              Already have an account?{' '}
-              <Text 
-                style={[styles.loginLink, { color: isDark ? colors.tint : '#00456C' }]} 
-                onPress={() => router.push("/login")}
-              >
-                Login <MaterialCommunityIcons name="login" size={16} color={isDark ? colors.tint : '#00456C'} />
+            <Animated.View entering={FadeInDown.delay(1100).duration(800).springify()}>
+              <Text style={[styles.loginText, { color: isDark ? colors.subtext : '#666' }]}>
+                Already have an account?{' '}
+                <Text 
+                  style={[styles.loginLink, { color: isDark ? colors.tint : '#00456C' }]} 
+                  onPress={() => router.push("/login")}
+                >
+                  Login <MaterialCommunityIcons name="login" size={16} color={isDark ? colors.tint : '#00456C'} />
+                </Text>
               </Text>
-            </Text>
-          </Animated.View>
+            </Animated.View>
 
-          {/* Country Modal */}
-          <Modal
-            visible={showCountryModal}
-            animationType="slide"
-            transparent={true}
-          >
-            <View style={[styles.modalView, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)' }]}>
-              <View style={[styles.modalContent, { 
-                backgroundColor: isDark ? colors.cardBackground : 'white',
-                borderRadius: 16,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
-                elevation: 5,
-              }]}>
-                <View style={[styles.modalHeader, { 
+            {/* Country Modal */}
+            <Modal
+              visible={showCountryModal}
+              animationType="slide"
+              transparent={true}
+            >
+              <View style={[styles.modalView, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)' }]}>
+                <View style={[styles.modalContent, { 
                   backgroundColor: isDark ? colors.cardBackground : 'white',
-                  borderBottomWidth: 1,
-                  borderBottomColor: isDark ? colors.border : '#eee',
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
+                  borderRadius: 16,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 3.84,
+                  elevation: 5,
                 }]}>
-                  <Text style={[styles.modalTitle, { color: isDark ? colors.text : '#333' }]}>
-                    <Ionicons name="earth" size={20} color={isDark ? colors.tint : '#00456C'} /> Select Country
-                  </Text>
-                  <TouchableOpacity onPress={() => setShowCountryModal(false)}>
-                    <AntDesign name="close" size={24} color={isDark ? colors.text : '#333'} />
-                  </TouchableOpacity>
-                </View>
-                <ScrollView style={[styles.modalScrollView, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
-                  {Object.keys(countries).map((country) => (
-                    <TouchableOpacity
-                      key={country}
-                      style={[styles.modalItem, { 
-                        backgroundColor: selectedCountry === country ? 
-                          (isDark ? colors.secondaryBackground : '#f0f0f0') : 
-                          (isDark ? colors.cardBackground : 'white'),
-                        borderBottomColor: isDark ? colors.border : '#eee'
-                      }]}
-                      onPress={() => {
-                        setSelectedCountry(country);
-                        setStates(countries[country]);
-                        setSelectedState('');
-                        setShowCountryModal(false);
-                      }}
-                    >
-                      <Text style={[styles.modalItemText, { color: isDark ? colors.text : '#333' }]}>{country}</Text>
-                      {selectedCountry === country && (
-                        <Ionicons name="checkmark-circle" size={20} color={isDark ? colors.tint : '#00456C'} />
-                      )}
+                  <View style={[styles.modalHeader, { 
+                    backgroundColor: isDark ? colors.cardBackground : 'white',
+                    borderBottomWidth: 1,
+                    borderBottomColor: isDark ? colors.border : '#eee',
+                    borderTopLeftRadius: 16,
+                    borderTopRightRadius: 16,
+                  }]}>
+                    <Text style={[styles.modalTitle, { color: isDark ? colors.text : '#333' }]}>
+                      <Ionicons name="earth" size={20} color={isDark ? colors.tint : '#00456C'} /> Select Country
+                    </Text>
+                    <TouchableOpacity onPress={() => setShowCountryModal(false)}>
+                      <AntDesign name="close" size={24} color={isDark ? colors.text : '#333'} />
                     </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                  </View>
+                  <ScrollView style={[styles.modalScrollView, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
+                    {Object.keys(countries).map((country) => (
+                      <TouchableOpacity
+                        key={country}
+                        style={[styles.modalItem, { 
+                          backgroundColor: selectedCountry === country ? 
+                            (isDark ? colors.secondaryBackground : '#f0f0f0') : 
+                            (isDark ? colors.cardBackground : 'white'),
+                          borderBottomColor: isDark ? colors.border : '#eee'
+                        }]}
+                        onPress={() => {
+                          setSelectedCountry(country);
+                          setStates(countries[country]);
+                          setSelectedState('');
+                          setShowCountryModal(false);
+                        }}
+                      >
+                        <Text style={[styles.modalItemText, { color: isDark ? colors.text : '#333' }]}>{country}</Text>
+                        {selectedCountry === country && (
+                          <Ionicons name="checkmark-circle" size={20} color={isDark ? colors.tint : '#00456C'} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
               </View>
-            </View>
-          </Modal>
+            </Modal>
 
-          {/* State Modal */}
-          <Modal
-            visible={showStateModal}
-            animationType="slide"
-            transparent={true}
-          >
-            <View style={[styles.modalView, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)' }]}>
-              <View style={[styles.modalContent, { 
-                backgroundColor: isDark ? colors.cardBackground : 'white',
-                borderRadius: 16,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
-                elevation: 5,
-              }]}>
-                <View style={[styles.modalHeader, { 
+            {/* State Modal */}
+            <Modal
+              visible={showStateModal}
+              animationType="slide"
+              transparent={true}
+            >
+              <View style={[styles.modalView, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)' }]}>
+                <View style={[styles.modalContent, { 
                   backgroundColor: isDark ? colors.cardBackground : 'white',
-                  borderBottomWidth: 1,
-                  borderBottomColor: isDark ? colors.border : '#eee',
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
+                  borderRadius: 16,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 3.84,
+                  elevation: 5,
                 }]}>
-                  <Text style={[styles.modalTitle, { color: isDark ? colors.text : '#333' }]}>
-                    <Ionicons name="location" size={20} color={isDark ? colors.tint : '#00456C'} /> Select State
-                  </Text>
-                  <TouchableOpacity onPress={() => setShowStateModal(false)}>
-                    <AntDesign name="close" size={24} color={isDark ? colors.text : '#333'} />
-                  </TouchableOpacity>
-                </View>
-                <ScrollView style={[styles.modalScrollView, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
-                  {states.map((state) => (
-                    <TouchableOpacity
-                      key={state}
-                      style={[styles.modalItem, { 
-                        backgroundColor: selectedState === state ? 
-                          (isDark ? colors.secondaryBackground : '#f0f0f0') : 
-                          (isDark ? colors.cardBackground : 'white'),
-                        borderBottomColor: isDark ? colors.border : '#eee'
-                      }]}
-                      onPress={() => {
-                        setSelectedState(state);
-                        setShowStateModal(false);
-                      }}
-                    >
-                      <Text style={[styles.modalItemText, { color: isDark ? colors.text : '#333' }]}>{state}</Text>
-                      {selectedState === state && (
-                        <Ionicons name="checkmark-circle" size={20} color={isDark ? colors.tint : '#00456C'} />
-                      )}
+                  <View style={[styles.modalHeader, { 
+                    backgroundColor: isDark ? colors.cardBackground : 'white',
+                    borderBottomWidth: 1,
+                    borderBottomColor: isDark ? colors.border : '#eee',
+                    borderTopLeftRadius: 16,
+                    borderTopRightRadius: 16,
+                  }]}>
+                    <Text style={[styles.modalTitle, { color: isDark ? colors.text : '#333' }]}>
+                      <Ionicons name="location" size={20} color={isDark ? colors.tint : '#00456C'} /> Select State
+                    </Text>
+                    <TouchableOpacity onPress={() => setShowStateModal(false)}>
+                      <AntDesign name="close" size={24} color={isDark ? colors.text : '#333'} />
                     </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                  </View>
+                  <ScrollView style={[styles.modalScrollView, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
+                    {states.map((state) => (
+                      <TouchableOpacity
+                        key={state}
+                        style={[styles.modalItem, { 
+                          backgroundColor: selectedState === state ? 
+                            (isDark ? colors.secondaryBackground : '#f0f0f0') : 
+                            (isDark ? colors.cardBackground : 'white'),
+                          borderBottomColor: isDark ? colors.border : '#eee'
+                        }]}
+                        onPress={() => {
+                          setSelectedState(state);
+                          setShowStateModal(false);
+                        }}
+                      >
+                        <Text style={[styles.modalItemText, { color: isDark ? colors.text : '#333' }]}>{state}</Text>
+                        {selectedState === state && (
+                          <Ionicons name="checkmark-circle" size={20} color={isDark ? colors.tint : '#00456C'} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
               </View>
-            </View>
-          </Modal>
-        </View>
-      </ScrollView>
+            </Modal>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
       <Toast config={toastConfig} />
     </>

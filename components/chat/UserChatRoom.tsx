@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, TextInput, FlatList, StyleSheet, TouchableOpacity, Image, Text, ActivityIndicator, Platform } from 'react-native';
+import { View, TextInput, FlatList, StyleSheet, TouchableOpacity, Image, Text, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from '../../services/supabase';
 import { useUserStore } from '../../store/useUserStore';
@@ -1492,72 +1492,78 @@ export default function UserChatRoom() {
       ]}>
         {renderHeader()}
         {renderSecurityWarning()}
-        <View style={[
-          styles.chatBackground,
-          isDark && { backgroundColor: colors.secondaryBackground }
-        ]}>
-          {renderLoading()}
-          <FlatList
-            ref={flatListRef}
-            data={messagesData}
-            inverted
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            contentContainerStyle={styles.messagesList}
-            onEndReached={handleLoadMore}
-            showsVerticalScrollIndicator={false} // Hide scrollbar for cleaner UI
-            ListFooterComponent={isLoadingMore ? (
-              <ActivityIndicator 
-                size="small" 
-                color={isDark ? colors.tint : Colors.primary} 
-                style={styles.loadingMore} 
-              />
-            ) : null}
-            {...listConfig}
-          />
-          
-          {/* Typing indicator */}
-          {isProviderTyping && (
-            <View style={[
-              styles.typingIndicator, 
-              isDark && { backgroundColor: 'rgba(0,0,0,0.5)' }
-            ]}>
-              <View style={styles.typingBubble}>
-                <View style={styles.typingDot} />
-                <View style={[styles.typingDot, styles.typingDotMiddle]} />
-                <View style={styles.typingDot} />
-              </View>
-              <Text style={[
-                styles.typingText,
-                isDark && { color: '#DDD' }
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+          <View style={[
+            styles.chatBackground,
+            isDark && { backgroundColor: colors.secondaryBackground }
+          ]}>
+            {renderLoading()}
+            <FlatList
+              ref={flatListRef}
+              data={messagesData}
+              inverted
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              contentContainerStyle={styles.messagesList}
+              onEndReached={handleLoadMore}
+              showsVerticalScrollIndicator={false} // Hide scrollbar for cleaner UI
+              ListFooterComponent={isLoadingMore ? (
+                <ActivityIndicator 
+                  size="small" 
+                  color={isDark ? colors.tint : Colors.primary} 
+                  style={styles.loadingMore} 
+                />
+              ) : null}
+              {...listConfig}
+            />
+            
+            {/* Typing indicator */}
+            {isProviderTyping && (
+              <View style={[
+                styles.typingIndicator, 
+                isDark && { backgroundColor: 'rgba(0,0,0,0.5)' }
               ]}>
-                {provider?.name} is typing...
-              </Text>
-            </View>
+                <View style={styles.typingBubble}>
+                  <View style={styles.typingDot} />
+                  <View style={[styles.typingDot, styles.typingDotMiddle]} />
+                  <View style={styles.typingDot} />
+                </View>
+                <Text style={[
+                  styles.typingText,
+                  isDark && { color: '#DDD' }
+                ]}>
+                  {provider?.name} is typing...
+                </Text>
+              </View>
+            )}
+          </View>
+          
+          {showVoiceRecorder ? (
+            <VoiceRecorder 
+              onRecordingComplete={handleRecordingComplete}
+              onCancel={handleCancelRecording}
+            />
+          ) : (
+            <ChatInput 
+              onSend={handleSendMessage}
+              onAttachment={pickDocument}
+              onVoiceRecord={toggleVoiceRecorder}
+              onTypingStart={handleTypingStart}
+              onTypingEnd={handleTypingEnd}
+              isDark={isDark}
+              replyingTo={replyTo ? {
+                id: replyTo.id,
+                content: replyTo.content,
+                sender: replyTo.sender_id === profile?.id ? 'You' : (provider?.name || 'Provider')
+              } : null}
+              onCancelReply={cancelReply}
+            />
           )}
-        </View>
-        
-        {showVoiceRecorder ? (
-          <VoiceRecorder 
-            onRecordingComplete={handleRecordingComplete}
-            onCancel={handleCancelRecording}
-          />
-        ) : (
-          <ChatInput 
-            onSend={handleSendMessage}
-            onAttachment={pickDocument}
-            onVoiceRecord={toggleVoiceRecorder}
-            onTypingStart={handleTypingStart}
-            onTypingEnd={handleTypingEnd}
-            isDark={isDark}
-            replyingTo={replyTo ? {
-              id: replyTo.id,
-              content: replyTo.content,
-              sender: replyTo.sender_id === profile?.id ? 'You' : (provider?.name || 'Provider')
-            } : null}
-            onCancelReply={cancelReply}
-          />
-        )}
+        </KeyboardAvoidingView>
       </View>
     </GestureHandlerRootView>
   );
