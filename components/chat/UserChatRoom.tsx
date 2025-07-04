@@ -19,6 +19,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppState, AppStateStatus } from 'react-native';
 import { ChatInput } from '../common/ChatInput';
 import { sendChatMessageNotification } from '../../services/pushNotifications';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Message cache constants
 const MESSAGE_CACHE_VERSION = 1;
@@ -78,6 +80,9 @@ export default function UserChatRoom() {
   
   // Create a ref for tracking if data is stale
   const isDataStaleRef = useRef(false);
+
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   // Check if we have cached data for this chat
   const getCachedMessages = useCallback(async () => {
@@ -323,10 +328,46 @@ export default function UserChatRoom() {
             // Process the new message
             setMessages(prev => {
               // Check if we already have this message (by ID)
-              const exists = messageMapRef.current.has(payload.new.id);
-              if (exists) return prev;
+              // const exists = messageMapRef.current.has(payload.new.id);
+              // if (exists) return prev;
               
-              // For text messages, check for temp messages
+              const newRealMessage = payload.new;
+              const tempIdPrefix = 'temp-';
+
+              const tempIndex = prev.findIndex(msg =>
+                  msg.id.toString().startsWith(tempIdPrefix) &&
+                  msg.content === newRealMessage.content &&
+                  msg.sender_id === newRealMessage.sender_id &&
+                  msg.type === newRealMessage.type &&
+                  Math.abs(new Date(msg.created_at).getTime() - new Date(newRealMessage.created_at).getTime()) < 5000 
+              );
+
+              if (tempIndex !== -1) {
+                  const tempMessage = prev[tempIndex];
+                  
+                  const finalMessage = {
+                      ...newRealMessage,
+                      replied_to_id: tempMessage.replied_to_id || newRealMessage.replied_to_id,
+                      replied_to_content: tempMessage.replied_to_content || newRealMessage.replied_to_content,
+                      replied_to_sender_id: tempMessage.replied_to_sender_id || newRealMessage.replied_to_sender_id
+                  };
+
+                  // Remove the temporary message 
+                  const updatedMessages = [...prev];
+                  updatedMessages.splice(tempIndex, 1); 
+                  updatedMessages.unshift(finalMessage); 
+                  messageMapRef.current.delete(tempMessage.id); 
+                  messageMapRef.current.set(finalMessage.id, finalMessage); 
+
+                  return updatedMessages;
+
+              } else {
+                  messageMapRef.current.set(newRealMessage.id, newRealMessage);
+                  return [newRealMessage, ...prev];
+              }
+
+              // Old logic below 
+              /*
               if (payload.new.type === 'text') {
                 const tempMessages = prev.filter(msg => 
                   msg.id.toString().startsWith('temp-') && 
@@ -398,79 +439,10 @@ export default function UserChatRoom() {
               const newMsg = payload.new;
               messageMapRef.current.set(newMsg.id, newMsg);
               
-              // If the message is from the provider, send a notification
-              if (payload.new.sender_type === 'provider' && payload.new.sender_id !== profile?.id) {
-                try {
-                  // Only send notification if app is in background or not focused
-                  const appState = AppState.currentState;
-                  const isActive = appState === 'active';
-                  
-                  // Check if we're currently on the same chat screen
-                  // This avoids sending notifications for messages we're actively viewing
-                  let isSameChatRoom = false;
-                  if (AppState.currentState === 'active') {
-                    if (Platform.OS === 'web' && window.location?.pathname) {
-                      // For web, check the URL path
-                      isSameChatRoom = window.location.pathname.includes(`chat/${chatRoomId}`);
-                    } else {
-                      // For mobile, we can only check if the app is active
-                      // router.getCurrentRoute() is not available in Expo Router yet
-                      isSameChatRoom = true;
-                    }
-                  }
-                  
-                  if (!isActive || !isSameChatRoom) {
-                    // Get provider display name
-                    const providerName = provider?.name || 'Service Provider';
-                    
-                    // Determine content based on message type
-                    let content = '';
-                    switch (payload.new.type) {
-                      case 'text':
-                        content = payload.new.content;
-                        break;
-                      case 'image':
-                        content = '📷 Image';
-                        break;
-                      case 'file':
-                        content = '📎 File: ' + (payload.new.file_name || 'Attachment');
-                        break;
-                      case 'voice':
-                        content = '🎤 Voice message';
-                        break;
-                      default:
-                        content = 'New message';
-                    }
-                    
-                    // Use safe pattern with try-catch and timeout
-                    try {
-                      // We use setTimeout to ensure the notification is sent
-                      // even if the component unmounts
-                      setTimeout(async () => {
-                        try {
-                          await sendChatMessageNotification(
-                            providerName,
-                            content,
-                            chatRoomId as string,
-                            false // isProvider=false (recipient is user)
-                          );
-                        } catch (error) {
-                          console.error('[UserChatRoom] Error in delayed notification sending:', error);
-                        }
-                      }, 300);
-                    } catch (error) {
-                      console.error('[UserChatRoom] Error scheduling notification timeout:', error);
-                    }
-                  }
-                } catch (error) {
-                  console.error('[UserChatRoom] Error handling notification:', error);
-                }
-              }
-              
               return [newMsg, ...prev];
+              */
             });
             
-            // Mark messages as read if they're from the provider
             if (payload.new.sender_type === 'provider') {
               console.log('[UserChatRoom] Message from provider received, marking messages as read');
               setTimeout(() => {
@@ -495,7 +467,6 @@ export default function UserChatRoom() {
             setMessages(prev => 
               prev.map(msg => {
                 if (msg.id === payload.new.id) {
-                  // Update the message but preserve reply information
                   const updatedMsg = {
                     ...payload.new,
                     replied_to_id: msg.replied_to_id || payload.new.replied_to_id,
@@ -521,7 +492,6 @@ export default function UserChatRoom() {
         },
         (payload: any) => {
           if (payload.old && payload.old.id) {
-            // Remove the message from the map and state
             messageMapRef.current.delete(payload.old.id);
             setMessages(prev => 
               prev.filter(msg => msg.id !== payload.old.id)
@@ -531,13 +501,11 @@ export default function UserChatRoom() {
       )
       .subscribe();
 
-    // Set up presence channel
     if (provider?.id) {
       setupPresenceChannel(provider.id);
     }
   }, [chatRoomId]);
 
-  // Fetch provider details
   const fetchProviderDetails = useCallback(async () => {
     const { data, error } = await supabase
       .from('chat_rooms')
@@ -557,9 +525,7 @@ export default function UserChatRoom() {
     }
   }, [chatRoomId]);
 
-  // Optimized fetchMessages function with cursor-based pagination
   const fetchMessages = useCallback(async (loadMore = false, silentRefresh = false) => {
-    // Skip if already fetching, or if we're loading more but there's no more to load
     if (isFetchingRef.current || (!loadMore && !silentRefresh && !hasMore)) return;
     
     try {
@@ -584,11 +550,9 @@ export default function UserChatRoom() {
       
       // Apply pagination
       if (loadMore && cursorRef.current) {
-        // If we're loading more, use the cursor
         query = query.lt('created_at', cursorRef.current);
         query = query.limit(LOAD_MORE_COUNT);
       } else {
-        // Initial load
         query = query.limit(INITIAL_MESSAGES_COUNT);
       }
       
@@ -600,22 +564,18 @@ export default function UserChatRoom() {
       }
 
       if (data && data.length > 0) {
-        // Update cursor for next pagination
         const oldestMessage = data[data.length - 1];
         if (oldestMessage) {
           cursorRef.current = oldestMessage.created_at;
         }
         
-        // Set hasMore based on whether we received a full page
         const fetchLimit = loadMore ? LOAD_MORE_COUNT : INITIAL_MESSAGES_COUNT;
         setHasMore(data.length === fetchLimit);
 
         // Process and merge messages
         setMessages(prev => {
-          // Keep track of existing messages by ID to avoid duplicates
           const existingIds = new Set(prev.map(msg => msg.id));
           
-          // Keep any reply information from existing messages when adding new ones
           const replyInfoMap = new Map();
           prev.forEach(msg => {
             if (msg.replied_to_id || msg.replied_to_content || msg.replied_to_sender_id) {
@@ -627,7 +587,6 @@ export default function UserChatRoom() {
             }
           });
           
-          // Process new messages and update message map
           const newMessages = data
             .filter(msg => !existingIds.has(msg.id) || silentRefresh)
             .map(msg => {
@@ -637,19 +596,13 @@ export default function UserChatRoom() {
               return processedMsg;
             });
           
-          // If we're loading more, append to existing messages
-          // If we're doing a silent refresh, intelligently merge to maintain scroll position
-          // If we're doing an initial load, replace all messages
           if (loadMore && !silentRefresh) {
             return [...prev, ...newMessages];
           } else if (silentRefresh) {
-            // For silent refresh, intelligently merge to maintain scroll position
             const allMessages = [...prev];
             
-            // Add new messages that don't exist in current set
             newMessages.forEach(newMsg => {
               if (!existingIds.has(newMsg.id)) {
-                // Add to the right position based on created_at
                 const insertIndex = allMessages.findIndex(
                   msg => new Date(msg.created_at) < new Date(newMsg.created_at)
                 );
@@ -668,12 +621,10 @@ export default function UserChatRoom() {
           }
         });
         
-        // Update cache in the background (don't wait)
         if (!silentRefresh && !loadMore) {
           cacheMessages(data, cursorRef.current, data.length === INITIAL_MESSAGES_COUNT);
         }
         
-        // Check for unread messages
         const hasUnreadProviderMessages = data.some(
           msg => msg.sender_type === 'provider' && !msg.is_read
         );
@@ -687,18 +638,15 @@ export default function UserChatRoom() {
           }, 500);
         }
       } else if (data && data.length === 0) {
-        // No more messages to load
         setHasMore(false);
         
         if (!loadMore && !silentRefresh) {
-          // If this is an initial load and no messages, set empty array
           setMessages([]);
         }
       }
     } catch (error) {
       console.error('[UserChatRoom] Error in fetchMessages:', error);
     } finally {
-      // Reset loading states
       isFetchingRef.current = false;
       if (!silentRefresh) {
         setIsLoading(false);
@@ -707,14 +655,12 @@ export default function UserChatRoom() {
     }
   }, [chatRoomId, hasMore, cacheMessages]);
 
-  // Handler for loading more messages (optimized)
   const handleLoadMore = useCallback(() => {
     if (!isLoading && !isLoadingMore && hasMore && !isFetchingRef.current) {
       fetchMessages(true);
     }
   }, [isLoading, isLoadingMore, hasMore, fetchMessages]);
 
-  // Add a handler for sending messages that works with ChatInput
   const handleSendMessage = useCallback((text: string) => {
     if (!text.trim() || !profile?.id) return;
 
@@ -722,7 +668,6 @@ export default function UserChatRoom() {
     const tempId = `temp-${Date.now()}`;
     const tempCreatedAt = new Date().toISOString();
     
-    // Create temp message including reply UI data so it appears in the UI
     const tempMessage: Message = {
       id: tempId,
       chat_room_id: chatRoomId as string, 
@@ -740,10 +685,13 @@ export default function UserChatRoom() {
     };
     
     setMessages(prevMessages => [tempMessage, ...prevMessages]);
-    setReplyTo(null); // Clear reply state after sending
+    setReplyTo(null); 
+
+    setTimeout(() => {
+      setNewMessage('');
+    }, 50);
     
     try {
-      // Send the message to the backend WITHOUT reply data
       supabase
         .from('chat_messages')
         .insert({
@@ -753,7 +701,6 @@ export default function UserChatRoom() {
           sender_type: 'user',
           type: 'text',
           created_at: tempCreatedAt
-          // Reply data removed from backend persistence
         })
         .then(({ error }) => {
           if (error) {
@@ -777,7 +724,6 @@ export default function UserChatRoom() {
     }
   }, [profile?.id, chatRoomId, replyTo]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (presenceChannelRef.current) {
@@ -811,7 +757,6 @@ export default function UserChatRoom() {
       if (unreadMessages && unreadMessages.length > 0) {
         console.log(`[UserChatRoom] Found ${unreadMessages.length} unread messages to update`);
         
-        // Batch update all messages
         const { error: batchUpdateError } = await supabase
           .from('chat_messages')
           .update({ is_read: true })
@@ -819,7 +764,6 @@ export default function UserChatRoom() {
           
         if (batchUpdateError) {
           console.error('[UserChatRoom] Batch update failed, falling back to individual updates');
-          // Fall back to individual updates
           for (const msg of unreadMessages) {
             const { error: singleUpdateError } = await supabase
               .from('chat_messages')
@@ -836,10 +780,8 @@ export default function UserChatRoom() {
           console.log(`[UserChatRoom] Successfully batch updated ${unreadMessages.length} messages`);
         }
         
-        // Small delay to ensure updates are processed
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Update the local message state to reflect read status
         setMessages(prev => 
           prev.map(msg => {
             if (msg.sender_type === 'provider' && !msg.is_read) {
@@ -849,7 +791,6 @@ export default function UserChatRoom() {
           })
         );
         
-        // Update user unread count
         const { count: totalUnread } = await supabase
           .from('chat_messages')
           .select('count', { count: 'exact', head: true })
@@ -876,23 +817,19 @@ export default function UserChatRoom() {
     }
   }, [isMarkingRead, chatRoomId]);
 
-  // Store the markMessagesAsRead function in a ref to avoid dependency cycles
   useEffect(() => {
     markMessagesAsReadRef.current = markMessagesAsRead;
   }, [markMessagesAsRead]);
 
-  // Message deletion handler
   const handleMessageDelete = useCallback((messageId: string) => {
     messageMapRef.current.delete(messageId);
     setMessages(prevMessages => prevMessages.filter(msg => msg.id !== messageId));
   }, []);
 
-  // Handle reply to message
   const handleReplyToMessage = useCallback((message: Message) => {
     setReplyTo(message);
   }, []);
 
-  // Optimized renderItem function with useCallback for stability
   const renderItem = useCallback(({ item }: { item: Message }) => {
     const isOwn = item.sender_id === profile?.id;
     return (
@@ -902,20 +839,15 @@ export default function UserChatRoom() {
         onMessageDelete={handleMessageDelete}
         isDark={isDark}
         colors={colors}
-        onReply={handleReplyToMessage}
         senderName={item.sender_type === 'provider' ? provider?.name : 'You'}
         senderImage={item.sender_type === 'provider' ? provider?.profile_pic : undefined}
-        // Pass only the props that are needed, avoid unnecessary props
       />
     );
-  }, [profile?.id, handleMessageDelete, isDark, colors, handleReplyToMessage, provider]);
+  }, [profile?.id, handleMessageDelete, isDark, colors, provider]);
 
-  // Extract keyExtractor function to prevent re-rendering
   const keyExtractor = useCallback((item: Message) => `message-${item.id}`, []);
 
-  // More accurate getItemLayout function to improve scrolling performance
   const getItemLayout = useCallback((data: any, index: number) => {
-    // Using a better estimated item height
     return {
       length: ESTIMATED_ITEM_HEIGHT,
       offset: ESTIMATED_ITEM_HEIGHT * index,
@@ -923,26 +855,20 @@ export default function UserChatRoom() {
     };
   }, []);
 
-  // Update the listConfig with proper types
+  
   const listConfig = useMemo(() => ({
-    initialNumToRender: 10, // Render fewer initial items
-    maxToRenderPerBatch: 5, // Render fewer items per batch 
-    windowSize: 8, // Smaller window size
-    updateCellsBatchingPeriod: 100, // Longer batching period for fewer updates
-    removeClippedSubviews: Platform.OS !== 'web', // Enable on mobile, can cause issues on web
-    maintainVisibleContentPosition: {
-      minIndexForVisible: 0,
-      autoscrollToTopThreshold: 10,
-    },
-    getItemLayout: getItemLayout, // Use more accurate item layout function
-    onEndReachedThreshold: 0.2, // Load more when closer to the end
-    scrollEventThrottle: 32, // Add a performance boost by increasing scroll event throttling
-    ListEmptyComponent: null, // Optimize memory usage by using a stable empty array
-    keyboardShouldPersistTaps: 'handled' as const, // Fix type with 'as const'
+    initialNumToRender: 10, 
+    maxToRenderPerBatch: 5, 
+    windowSize: 8, 
+    updateCellsBatchingPeriod: 100, 
+    removeClippedSubviews: Platform.OS !== 'web', 
+    onEndReachedThreshold: 0.2, 
+    scrollEventThrottle: 32, 
+    ListEmptyComponent: React.memo(() => null), 
+    keyboardShouldPersistTaps: 'handled' as const, 
     keyboardDismissMode: 'on-drag' as const,
-  }), [getItemLayout]);
+  }), []);
 
-  // Add function to force refresh data
   const refreshData = useCallback(() => {
     if (isDataStaleRef.current && !isFetchingRef.current) {
       fetchMessages(false, true);
@@ -950,9 +876,7 @@ export default function UserChatRoom() {
     }
   }, [fetchMessages]);
 
-  // Add listener for app state changes to refresh when app becomes active
   useEffect(() => {
-    // When app becomes active, mark data as potentially stale
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (
         appStateRef.current.match(/inactive|background/) && 
@@ -970,13 +894,10 @@ export default function UserChatRoom() {
     };
   }, [refreshData]);
 
-  // Add memory optimization for large lists
   useEffect(() => {
     const clearStaleMessages = () => {
-      // If message count exceeds a threshold, trim older messages that are far off-screen
       if (messages.length > 200) {
         setMessages(prevMessages => {
-          // Keep latest 150 messages, discard the rest
           const latestMessages = prevMessages.slice(0, 150);
           console.log('[UserChatRoom] Trimmed message cache to reduce memory usage');
           return latestMessages;
@@ -984,18 +905,15 @@ export default function UserChatRoom() {
       }
     };
 
-    // Add a cleanup when component unmounts
     return () => {
       clearStaleMessages();
     };
   }, [messages.length]);
 
-  // Cancel reply
   const cancelReply = useCallback(() => {
     setReplyTo(null);
   }, []);
 
-  // Document picker function
   const pickDocument = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -1013,7 +931,6 @@ export default function UserChatRoom() {
           lastModified: result.assets[0].lastModified
         };
         
-        // Check if it's an image file that can be compressed
         if (file.mimeType && file.mimeType.startsWith('image/')) {
           const compressedFile = await compressImage(file);
           await uploadFile(compressedFile);
@@ -1031,46 +948,38 @@ export default function UserChatRoom() {
     }
   }, [profile?.id]);
 
-  // Function to compress images before upload
   const compressImage = async (file: FileUpload): Promise<FileUpload> => {
     try {
-      // Skip compression for already small files (less than 300KB)
       if (file.size && file.size < 300 * 1024) return file;
       
       const result = await ImageManipulator.manipulateAsync(
         file.uri,
-        [{ resize: { width: 1024 } }], // Resize to max width of 1024
+        [{ resize: { width: 1024 } }], 
         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
       );
       
-      // Create a new FileUpload object with compressed data
       return {
         ...file,
         uri: result.uri,
-        // Use FileSystem to get file size if needed, or keep original size
         size: file.size,
         mimeType: 'image/jpeg'
       };
     } catch (error) {
-      // If compression fails, return original file
       return file;
     }
   };
 
-  // File upload function
   const uploadFile = useCallback(async (file: FileUpload) => {
     const fileExt = file.name.split('.').pop() || 'file';
     const fileName = `${chatRoomId}_${Date.now()}.${fileExt}`;
     const isImage = fileExt.toLowerCase().match(/(jpg|jpeg|png|gif)/) ? true : false;
     const tempId = `temp-${Date.now()}`;
     
-    // Create a temporary URL for immediate display
     const tempUrl = file.uri;
     
-    // Create temporary message for immediate display (for the UI only)
     const tempMessage: Message = {
       id: tempId,
-      chat_room_id: chatRoomId as string, // For TypeScript compatibility
+      chat_room_id: chatRoomId as string, 
       sender_id: profile?.id || '',
       content: tempUrl,
       sender_type: 'user',
@@ -1080,12 +989,10 @@ export default function UserChatRoom() {
       is_read: false
     };
     
-    // Add to messages immediately for better UX
     setMessages(prevMessages => [tempMessage, ...prevMessages]);
     messageMapRef.current.set(tempId, tempMessage);
     
     try {
-      // Don't set global loading state, as it affects the entire UI
       const localIsLoading = true;
 
       const { data, error } = await supabase.storage
@@ -1097,7 +1004,6 @@ export default function UserChatRoom() {
         } as any);
 
       if (error) {
-        // Remove temp message on error
         messageMapRef.current.delete(tempId);
         setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
         throw error;
@@ -1107,7 +1013,6 @@ export default function UserChatRoom() {
         .from('chat-attachments')
         .getPublicUrl(fileName);
 
-      // Create message object for database (uses chat_id)
       const { error: messageError } = await supabase
         .from('chat_messages')
         .insert({
@@ -1122,15 +1027,12 @@ export default function UserChatRoom() {
         });
 
       if (messageError) {
-        // Remove temp message on error
         messageMapRef.current.delete(tempId);
         setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
         throw messageError;
       }
 
-      // Message will be added by the realtime subscription and will replace our temporary message
     } catch (error) {
-      // Remove temp message on error
       messageMapRef.current.delete(tempId);
       setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
       
@@ -1143,17 +1045,15 @@ export default function UserChatRoom() {
     }
   }, [chatRoomId, profile?.id]);
 
-  // Upload voice recording function
   const uploadVoiceRecording = useCallback(async (audioUri: string, duration: number) => {
     const fileName = `${chatRoomId}_voice_${Date.now()}.m4a`;
     const tempId = `temp-${Date.now()}`;
     
-    // Create temporary message for immediate display (for the UI only)
     const tempMessage: Message = {
       id: tempId,
-      chat_room_id: chatRoomId as string, // For TypeScript compatibility
+      chat_room_id: chatRoomId as string, 
       sender_id: profile?.id || '',
-      content: audioUri, // Use local URI temporarily
+      content: audioUri, 
       sender_type: 'user',
       type: 'voice',
       file_name: fileName,
@@ -1162,34 +1062,28 @@ export default function UserChatRoom() {
       is_read: false
     };
     
-    // Add to messages immediately for better UX
     setMessages(prevMessages => [tempMessage, ...prevMessages]);
     messageMapRef.current.set(tempId, tempMessage);
     
     try {
-      // Get file info
       let fileInfo;
       try {
         fileInfo = await FileSystem.getInfoAsync(audioUri);
         
         if (!fileInfo.exists) {
-          // Remove temp message if file doesn't exist
           messageMapRef.current.delete(tempId);
           setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
           throw new Error('Recorded audio file not found');
         }
       } catch (error) {
         console.error('File info error:', error);
-        // Remove temp message on error
         messageMapRef.current.delete(tempId);
         setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
         throw new Error('Unable to access the recorded audio file');
       }
       
-      // Add a small delay to ensure file is fully written
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Upload audio file to Supabase storage
       const { data, error } = await supabase.storage
         .from('chat-attachments')
         .upload(fileName, {
@@ -1200,18 +1094,15 @@ export default function UserChatRoom() {
 
       if (error) {
         console.error('Supabase storage error:', error);
-        // Remove temp message on error
         messageMapRef.current.delete(tempId);
         setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
         throw error;
       }
 
-      // Get the public URL
       const { data: { publicUrl } } = supabase.storage
         .from('chat-attachments')
         .getPublicUrl(fileName);
 
-      // Create database message object (uses chat_id)
       const { error: messageError } = await supabase
         .from('chat_messages')
         .insert({
@@ -1228,16 +1119,13 @@ export default function UserChatRoom() {
 
       if (messageError) {
         console.error('Message insert error:', messageError);
-        // Remove temp message on error
         messageMapRef.current.delete(tempId);
         setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
         throw messageError;
       }
 
-      // Message will be added by the realtime subscription and will replace our temporary message
     } catch (error) {
       console.error('Voice note upload error:', error);
-      // Remove temp message on error
       messageMapRef.current.delete(tempId);
       setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
       
@@ -1252,48 +1140,39 @@ export default function UserChatRoom() {
     }
   }, [chatRoomId, profile?.id]);
 
-  // Handle recording complete
   const handleRecordingComplete = useCallback((audioUri: string, duration: number) => {
     uploadVoiceRecording(audioUri, duration);
   }, [uploadVoiceRecording]);
 
-  // Cancel recording
   const handleCancelRecording = useCallback(() => {
     setShowVoiceRecorder(false);
   }, []);
 
-  // Toggle voice recorder
   const toggleVoiceRecorder = useCallback(() => {
     setShowVoiceRecorder(prev => !prev);
   }, []);
 
-  // Input handling optimization
   const handleInputChange = useCallback((text: string) => {
     setNewMessage(text);
   }, []);
 
-  // Add a function to set up presence channel
   const setupPresenceChannel = useCallback((providerId: string) => {
     if (presenceChannelRef.current) {
       supabase.removeChannel(presenceChannelRef.current);
     }
 
-    // Create a presence channel for typing indicators and online status
     presenceChannelRef.current = supabase.channel(`${PRESENCE_CHANNEL}:${chatRoomId}`, {
       config: {
         presence: {
-          key: profile?.id, // Current user's ID
+          key: profile?.id, 
         },
       },
     });
 
-    // Subscribe to presence changes
     presenceChannelRef.current
       .on('presence', { event: 'sync' }, () => {
-        // Get presence state
         const state = presenceChannelRef.current.presenceState();
         
-        // Check if provider is in the presence state
         const providerState = Object.values(state).flat().find(
           (user: any) => user.user_id === providerId
         ) as PresenceState | undefined;
@@ -1302,16 +1181,13 @@ export default function UserChatRoom() {
           setIsProviderOnline(true);
           setLastSeen(new Date().toISOString());
           
-          // Check if provider is typing
           if (providerState.typing) {
             setIsProviderTyping(true);
             
-            // Clear any existing timeout
             if (typingTimeoutRef.current) {
               clearTimeout(typingTimeoutRef.current);
             }
             
-            // Set new timeout to clear typing indicator
             typingTimeoutRef.current = setTimeout(() => {
               setIsProviderTyping(false);
             }, TYPING_TIMEOUT);
@@ -1319,7 +1195,6 @@ export default function UserChatRoom() {
         } else {
           setIsProviderOnline(false);
           
-          // If provider goes offline, they're not typing
           setIsProviderTyping(false);
           if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
@@ -1327,19 +1202,16 @@ export default function UserChatRoom() {
         }
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }: any) => {
-        // Provider joined
         if (newPresences.some((presence: any) => presence.user_id === providerId)) {
           setIsProviderOnline(true);
           setLastSeen(new Date().toISOString());
         }
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }: any) => {
-        // Provider left
         if (leftPresences.some((presence: any) => presence.user_id === providerId)) {
           setIsProviderOnline(false);
           setLastSeen(new Date().toISOString());
           
-          // Clear typing indicator when provider leaves
           setIsProviderTyping(false);
           if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
@@ -1348,7 +1220,6 @@ export default function UserChatRoom() {
       })
       .subscribe();
 
-    // Track user presence (let others know you're online)
     presenceChannelRef.current.track({
       user_id: profile?.id,
       online_at: new Date().toISOString(),
@@ -1356,7 +1227,6 @@ export default function UserChatRoom() {
     });
   }, [chatRoomId, profile?.id]);
 
-  // Send typing indicator
   const handleTypingStart = useCallback(() => {
     if (!presenceChannelRef.current || !profile?.id) return;
     
@@ -1367,7 +1237,6 @@ export default function UserChatRoom() {
     });
   }, [profile?.id]);
 
-  // Clear typing indicator
   const handleTypingEnd = useCallback(() => {
     if (!presenceChannelRef.current || !profile?.id) return;
     
@@ -1378,7 +1247,6 @@ export default function UserChatRoom() {
     });
   }, [profile?.id]);
 
-  // Format when the provider was last seen
   const formatLastSeen = useCallback((lastSeenDate: string | null) => {
     if (!lastSeenDate) return 'Never online';
     
@@ -1398,7 +1266,6 @@ export default function UserChatRoom() {
     return lastSeen.toLocaleDateString();
   }, []);
 
-  // Replace or update the renderHeader function to include online status and typing indicator
   const renderHeader = useCallback(() => (
     <View style={[styles.header, isDark && { backgroundColor: '#0066CC' }]}>
       <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -1492,56 +1359,56 @@ export default function UserChatRoom() {
       ]}>
         {renderHeader()}
         {renderSecurityWarning()}
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
-          <View style={[
-            styles.chatBackground,
-            isDark && { backgroundColor: colors.secondaryBackground }
-          ]}>
-            {renderLoading()}
-            <FlatList
-              ref={flatListRef}
-              data={messagesData}
-              inverted
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              contentContainerStyle={styles.messagesList}
-              onEndReached={handleLoadMore}
-              showsVerticalScrollIndicator={false} // Hide scrollbar for cleaner UI
-              ListFooterComponent={isLoadingMore ? (
-                <ActivityIndicator 
-                  size="small" 
-                  color={isDark ? colors.tint : Colors.primary} 
-                  style={styles.loadingMore} 
-                />
-              ) : null}
-              {...listConfig}
-            />
-            
-            {/* Typing indicator */}
-            {isProviderTyping && (
-              <View style={[
-                styles.typingIndicator, 
-                isDark && { backgroundColor: 'rgba(0,0,0,0.5)' }
-              ]}>
-                <View style={styles.typingBubble}>
-                  <View style={styles.typingDot} />
-                  <View style={[styles.typingDot, styles.typingDotMiddle]} />
-                  <View style={styles.typingDot} />
-                </View>
-                <Text style={[
-                  styles.typingText,
-                  isDark && { color: '#DDD' }
-                ]}>
-                  {provider?.name} is typing...
-                </Text>
-              </View>
-            )}
-          </View>
+        <View style={[
+          styles.chatBackground,
+          isDark && { backgroundColor: colors.secondaryBackground }
+        ]}>
+          {renderLoading()}
+          <FlatList
+            ref={flatListRef}
+            data={messagesData}
+            inverted
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={styles.messagesList}
+            onEndReached={handleLoadMore}
+            showsVerticalScrollIndicator={false} // Hide scrollbar for cleaner UI
+            ListFooterComponent={isLoadingMore ? (
+              <ActivityIndicator 
+                size="small" 
+                color={isDark ? colors.tint : Colors.primary} 
+                style={styles.loadingMore} 
+              />
+            ) : null}
+            {...listConfig}
+          />
           
+          {/* Typing indicator */}
+          {isProviderTyping && (
+            <View style={[
+              styles.typingIndicator, 
+              isDark && { backgroundColor: 'rgba(0,0,0,0.5)' }
+            ]}>
+              <View style={styles.typingBubble}>
+                <View style={styles.typingDot} />
+                <View style={[styles.typingDot, styles.typingDotMiddle]} />
+                <View style={styles.typingDot} />
+              </View>
+              <Text style={[
+                styles.typingText,
+                isDark && { color: '#DDD' }
+              ]}>
+                {provider?.name} is typing...
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.bottom : 0}
+          style={{ width: '100%' }}
+        >
           {showVoiceRecorder ? (
             <VoiceRecorder 
               onRecordingComplete={handleRecordingComplete}

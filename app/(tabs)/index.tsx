@@ -150,15 +150,13 @@ export default function HomeScreen() {
     if (isRetrying) return;
     try {
       setIsRetrying(true);
-      
-      // Create a main timeout for the entire location operation
+     
       const locationMainTimeout = setTimeout(() => {
         if (isMounted.current) {
           console.warn('Location operation timed out completely');
           setLocationError(true);
           setIsRetrying(false);
-          
-          // Use a fallback "unknown" location so the rest of the app can function
+    
           if (!location) {
             setLocation({
               coords: {
@@ -175,7 +173,7 @@ export default function HomeScreen() {
             setLocationText('Unknown location');
           }
         }
-      }, 20000); // 20 second hard timeout
+      }, 20000); 
         
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -184,7 +182,6 @@ export default function HomeScreen() {
           setLocationError(true);
           setIsRetrying(false);
           
-          // Use a fallback "unknown" location so providers still load
           if (!location) {
             setLocation({
               coords: {
@@ -206,7 +203,6 @@ export default function HomeScreen() {
 
       let position: Location.LocationObject | null = null;
       
-      // Try high accuracy first
       try {
         position = await Promise.race([
           Location.getCurrentPositionAsync({
@@ -220,7 +216,6 @@ export default function HomeScreen() {
         console.warn('High accuracy position failed, trying low accuracy:', highAccuracyError);
       }
       
-      // Fall back to low accuracy if needed
       if (!position) {
         try {
           position = await Promise.race([
@@ -237,7 +232,6 @@ export default function HomeScreen() {
         }
       }
       
-      // Clear main timeout as we got a position
       clearTimeout(locationMainTimeout);
       
       if (!position) {
@@ -252,7 +246,6 @@ export default function HomeScreen() {
       try {
         const { latitude, longitude } = position.coords;
         
-        // Attempt to get address from coordinates
         try {
           const addressResult = await Promise.race([
             Location.reverseGeocodeAsync({ latitude, longitude }),
@@ -291,7 +284,6 @@ export default function HomeScreen() {
         }
       } catch (error) {
         console.error('Error processing location:', error);
-        // We still have the basic coordinates, so not a complete failure
         if (isMounted.current) {
           setLocationText('Location found');
         }
@@ -301,7 +293,6 @@ export default function HomeScreen() {
       if (isMounted.current) {
         setLocationError(true);
         
-        // If we don't have any location yet, use a fallback
         if (!location) {
           setLocation({
             coords: {
@@ -326,7 +317,6 @@ export default function HomeScreen() {
     }
   }, [profile, updateProfile, isRetrying, location]);
 
-  // Helper function to update location in user profile
   const updateLocationInProfile = useCallback(async (userId: string, locationData: any) => {
     try {
       const { error: updateError } = await supabase
@@ -339,7 +329,7 @@ export default function HomeScreen() {
       } else if (isMounted.current && profile) {
         updateProfile({
           ...profile,
-          // @ts-ignore - ignoring TypeScript error for location property
+          // @ts-ignore - ignoring TypeScript
           location: locationData
         });
       }
@@ -348,7 +338,6 @@ export default function HomeScreen() {
     }
   }, [profile, updateProfile]);
 
-  // Helper function for when no address is found from geocoding
   const handleNoAddressFound = useCallback((position: Location.LocationObject, userId?: string) => {
     const { latitude, longitude } = position.coords;
     const locationString = 'Location found';
@@ -396,14 +385,13 @@ export default function HomeScreen() {
         setLoading(true);
       }
       
-      // Add a hard timeout for the entire fetch operation
       const fetchTimeoutId = setTimeout(() => {
         if (isMounted.current) {
           console.log('Provider fetch operation timed out completely');
           setLoading(false);
-          setProviders(prev => prev.length > 0 ? prev : []); // Keep existing providers if any
+          setProviders(prev => prev.length > 0 ? prev : []); 
           
-          // Show feedback to user
+          
           const message = 'Loading timed out. Pull down to retry.';
           if (Platform.OS === 'android') {
             ToastAndroid.show(message, ToastAndroid.SHORT);
@@ -412,11 +400,10 @@ export default function HomeScreen() {
             setSnackbarVisible(true);
           }
         }
-      }, 20000); // 20 second hard timeout
+      }, 20000); 
       
       let data;
       try {
-        // First fetch basic provider data without the complex race promise
         const { data: providerData, error: fetchError } = await supabase
           .from('providers')
           .select(`
@@ -447,18 +434,14 @@ export default function HomeScreen() {
         console.error('Error fetching providers data:', fetchError);
         clearTimeout(fetchTimeoutId);
         
-        // Avoid setting providers to empty array if we already have data
         if (isMounted.current) {
           setLoading(false);
-          // Only reset providers if we have no existing data
           setProviders(prev => prev.length > 0 ? prev : []);
         }
         return;
       }
 
-      // We have basic provider data, now enhance it
       try {
-        // Process all providers at once without complex batching
         const enhancedProviders = data.map(provider => {
           return {
             ...provider,
@@ -475,10 +458,8 @@ export default function HomeScreen() {
           };
         });
 
-        // Sort providers by distance if location available
         const providersWithDistance = location?.coords 
           ? enhancedProviders.sort((a, b) => {
-              // Handle null/undefined distances
               if (a.distance === null && b.distance === null) return 0;
               if (a.distance === null) return 1;
               if (b.distance === null) return -1;
@@ -486,13 +467,11 @@ export default function HomeScreen() {
             })
           : enhancedProviders;
 
-        // First set providers with basic data quickly
         if (isMounted.current) {
           setProviders(providersWithDistance);
           setPage(0);
         }
-        
-        // Then enhance with reviews in the background
+
         const enhanceWithReviews = async () => {
           try {
             const enhancedWithReviews = await Promise.all(
@@ -527,10 +506,8 @@ export default function HomeScreen() {
               })
             );
             
-            // Sort by distance again with the enhanced data
             const sortedWithReviews = location?.coords 
               ? enhancedWithReviews.sort((a, b) => {
-                  // Handle null/undefined distances
                   if (a.distance === null && b.distance === null) return 0;
                   if (a.distance === null) return 1;
                   if (b.distance === null) return -1;
@@ -543,16 +520,13 @@ export default function HomeScreen() {
             }
           } catch (reviewsError) {
             console.warn('Error enhancing providers with reviews:', reviewsError);
-            // We already have basic provider data, so this is not critical
           }
         };
         
-        // Start the background enhancement
         enhanceWithReviews();
         
       } catch (processingError) {
-        console.error('Error processing provider data:', processingError);
-        // We might still have basic provider data, try to use it
+          console.error('Error processing provider data:', processingError);
         if (data && data.length > 0 && isMounted.current) {
           const basicProviders = data.map(provider => ({
             ...provider,
@@ -562,7 +536,6 @@ export default function HomeScreen() {
           setProviders(basicProviders);
         }
       } finally {
-        // Always clear the timeout and set loading to false
         clearTimeout(fetchTimeoutId);
         if (isMounted.current) {
           setLoading(false);
@@ -572,7 +545,6 @@ export default function HomeScreen() {
       console.error('Unexpected error fetching providers:', error);
       if (isMounted.current) {
         setLoading(false);
-        // Only reset providers if we have no existing data
         setProviders(prev => prev.length > 0 ? prev : []);
       }
     }
@@ -581,7 +553,6 @@ export default function HomeScreen() {
   const loadMoreProviders = useCallback(async () => {
     if (loading || refreshing) return;
     
-    // If we're searching or showing nearby/random providers, we don't need pagination
     if (searchQuery || (!searchQuery && nearbyProviders.length > 0)) {
       return;
     }
@@ -590,12 +561,9 @@ export default function HomeScreen() {
     const startAfter = nextPage * ITEMS_PER_PAGE;
     
     try {
-      // Set a temporary loading state for pagination
       if (isMounted.current) {
         setLoading(true);
       }
-      
-      // First fetch providers
       const { data, error } = await supabase
         .from('providers')
         .select(`
@@ -610,14 +578,12 @@ export default function HomeScreen() {
       if (error) throw error;
       
       if (data.length === 0) {
-        // No more data
         if (isMounted.current) {
           setLoading(false);
         }
         return;
       }
 
-      // Process in batches like above
       const processProviderBatch = async (providers: any[], startIdx: number, batchSize: number) => {
         const endIdx = Math.min(startIdx + batchSize, providers.length);
         const batch = providers.slice(startIdx, endIdx);
@@ -686,20 +652,16 @@ export default function HomeScreen() {
         return processedBatch;
       };
       
-      // Process providers in batches of 5
       const batchSize = 5;
       let results: Provider[] = [];
       
-      // Use Promise.all to process all batches concurrently for better performance
       const batchPromises = [];
       for (let i = 0; i < data.length; i += batchSize) {
         batchPromises.push(processProviderBatch(data, i, batchSize));
       }
       
-      // Wait for all batches to complete
       const batchResults = await Promise.all(batchPromises);
       
-      // Flatten the results
       results = batchResults.flat();
 
       const newProvidersWithDistance = location?.coords 
@@ -724,14 +686,11 @@ export default function HomeScreen() {
     if (profile?.id) {
       fetchProviders();
       
-      // Only initialize location once after login
       if (!locationInitialized.current) {
         try {
-          // Try to load location from profile - using type assertion for TypeScript
           const userLocation = (profile as any).location;
           
           if (userLocation?.coords?.latitude && userLocation?.coords?.longitude) {
-            // Create a location object from saved coordinates
             const savedLocation = {
               coords: {
                 latitude: userLocation.coords.latitude,
@@ -745,7 +704,6 @@ export default function HomeScreen() {
               timestamp: Date.now()
             } as Location.LocationObject;
             
-            // Set the location from the profile data
             setLocation(savedLocation);
             setState(userLocation.region || '');
             setLga(userLocation.subregion || '');
@@ -1078,7 +1036,6 @@ export default function HomeScreen() {
     }));
   }, []);
 
-  // Memoize ListHeaderComponent to prevent re-renders
   const ListHeaderComponent = useMemo(() => (
     <>
       <HeaderSection

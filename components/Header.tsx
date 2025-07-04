@@ -50,7 +50,7 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
 
     fetchUnreadCount();
 
-    // Clean up existing channel if it exists
+   
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
@@ -71,7 +71,7 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
       )
       .subscribe();
       
-    // Store the channel reference
+   
     channelRef.current = channel;
 
     return () => {
@@ -81,7 +81,6 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
     };
   }, [profile?.id]);
 
-  // Add this new useEffect for handling back button on Android
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       if (showProfileMenu) {
@@ -94,7 +93,6 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
     return () => backHandler.remove();
   }, [showProfileMenu]);
 
-  // Ensure menu is closed when component unmounts
   useEffect(() => {
     return () => {
       if (showProfileMenu) {
@@ -167,14 +165,11 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Prevent multiple logouts
               if (isLoggingOut.current) return;
               isLoggingOut.current = true;
               
-              // Show the loading overlay immediately to prevent any visual flashes
               setShowLoading(true);
               
-              // Show a toast first
               Toast.show({
                 type: 'info',
                 text1: 'Logging out...',
@@ -182,65 +177,53 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
                 visibilityTime: 2000,
               });
               
-              // Get the user ID before clearing the profile
               const userId = profile?.id;
               
               // IMPORTANT: Prevent any navigation attempts during logout process
               isNavigatingRef.current = true;
-              
-              // Start with clean-up operations that don't affect UI
-              
-              // Clear subscriptions first to prevent any further real-time updates
               removeAllSubscriptions();
               
-              // Unregister push notifications if we have a user ID
               if (userId) {
                 try {
                   await unregisterPushNotifications(userId);
                 } catch (pushError) {
-                  console.error('Error unregistering push notifications:', pushError);
-                  // Continue with logout even if this fails
+                  console.error('Error unregistering push notifications:', pushError)
                 }
               }
               
-              // Force clear session data
               try {
                 await AsyncStorage.removeItem('supabase.auth.token');
               } catch (storageError) {
                 console.error('Error clearing auth storage:', storageError);
-                // Continue anyway
               }
               
-              // Now perform the actual sign out from Supabase
+             
               const { error: signOutError } = await supabase.auth.signOut();
               if (signOutError) {
                 console.error('Error during sign out:', signOutError);
-                // Continue anyway - we still want to force the user back to login
+               
               }
               
-              // CRITICAL: Clear profile state AFTER server-side operations
-              // This ensures we don't have UI flashes from profile state changes
+             
               useUserStore.setState({ 
                 profile: null,
                 isAuthenticated: false
               });
               
-              // Wait a brief moment for state to propagate and Supabase to finish
+             
               await new Promise(resolve => setTimeout(resolve, 300));
               
-              // Final navigation to login screen
-              // We do this only once, at the very end
+             
               router.replace('/(auth)/login');
               
-              // Reset flags after navigation is initiated
-              // The loading overlay will keep showing until navigation completes
+             
               setTimeout(() => {
                 isLoggingOut.current = false;
                 isNavigatingRef.current = false;
                 setShowLoading(false);
               }, 500);
             } catch (error: any) {
-              // Error handling - reset all flags and let user try again
+             
               isLoggingOut.current = false;
               isNavigatingRef.current = false;
               setShowLoading(false);
@@ -261,12 +244,12 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
     if (!isNavigatingRef.current) {
       isNavigatingRef.current = true;
       
-      // Ensure we close the menu first
+     
       if (showProfileMenu) {
         setShowProfileMenu(false);
       }
       
-      // Add a small delay to avoid navigation conflicts
+     
       setTimeout(() => {
         router.push('/notifications');
         isNavigatingRef.current = false;
@@ -275,7 +258,6 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
   }, [router, showProfileMenu]);
 
   const handleProfileClick = useCallback(() => {
-    // Only open if not in the middle of navigation
     if (!isNavigatingRef.current) {
       setShowProfileMenu(true);
     }
@@ -290,7 +272,7 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
       isNavigatingRef.current = true;
       closeMenu();
       
-      // Small timeout to ensure the modal closes properly first
+     
       setTimeout(() => {
         router.push('/(tabs)/profile');
         isNavigatingRef.current = false;
@@ -300,7 +282,6 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
 
   const handleLogoutClick = useCallback(() => {
     closeMenu();
-    // Small timeout to ensure the modal closes properly first
     setTimeout(() => {
       handleLogout();
     }, 100);
@@ -308,7 +289,6 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
 
   const handleResetApp = useCallback(() => {
     closeMenu();
-    // Small timeout to ensure the modal closes properly first
     setTimeout(() => {
       if (onReset) {
         onReset();
@@ -316,7 +296,7 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
     }, 100);
   }, [onReset, closeMenu]);
 
-  // Generate initials from user's name
+
   const getInitials = (name: string | undefined) => {
     if (!name) return '?';
     
@@ -325,22 +305,22 @@ function Header({ profile, onUpdateProfilePic, onReset }: HeaderProps) {
     return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
   };
 
-  // Generate a consistent background color based on user's name
+  
   const getAvatarColor = (name: string | undefined) => {
     if (!name) return '#888888';
     
-    // Create a simple hash of the name
+ 
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
     
-    // Convert to hex color
+  
     const hue = Math.abs(hash % 360);
     return `hsl(${hue}, 60%, 60%)`;
   };
 
-  // Render avatar with initials if no profile pic
+  
   const renderAvatar = () => {
     if (profile?.profile_pic) {
       return (

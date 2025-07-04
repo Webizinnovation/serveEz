@@ -159,7 +159,6 @@ export default function ProviderChatList() {
     }, 300);
   }, []);
 
-  // Setup animations for chat items - memoized
   const setupItemAnimations = useCallback((id: string, index: number) => {
     if (!fadeAnims[id]) {
       fadeAnims[id] = new Animated.Value(0);
@@ -178,7 +177,6 @@ export default function ProviderChatList() {
     };
   }, []);
 
-  // Setup badge animations - memoized
   const setupBadgeAnimation = useCallback((id: string, unreadCount: number = 0) => {
     if (!badgeScaleAnims[id]) {
       badgeScaleAnims[id] = new Animated.Value(1);
@@ -222,13 +220,12 @@ export default function ProviderChatList() {
     try {
       console.log(`[ProviderChatList] Marking messages as read for chat ${chatId}`);
       
-      // First, get all unread messages for this chat (including those with is_read = null)
       const { data: unreadMessages, error: fetchError } = await supabase
         .from('chat_messages')
         .select('id')
         .eq('chat_id', chatId)
         .eq('sender_type', 'user')
-        .or('is_read.is.null,is_read.eq.false'); // This handles both null and false values
+        .or('is_read.is.null,is_read.eq.false'); 
         
       if (fetchError) {
         console.error('[ProviderChatList] Error fetching unread messages:', fetchError);
@@ -238,7 +235,6 @@ export default function ProviderChatList() {
       if (unreadMessages && unreadMessages.length > 0) {
         console.log(`[ProviderChatList] Found ${unreadMessages.length} unread messages to update`);
         
-        // Use batch update instead of individual updates
         const { error: batchUpdateError } = await supabase
           .from('chat_messages')
           .update({ is_read: true })
@@ -251,7 +247,6 @@ export default function ProviderChatList() {
         
         console.log(`[ProviderChatList] Successfully batch updated ${unreadMessages.length} messages`);
 
-        // Update local state immediately
         setChatRooms(prevRooms => 
           prevRooms.map(room => {
             if (room.id === chatId) {
@@ -264,7 +259,6 @@ export default function ProviderChatList() {
           })
         );
         
-        // Update both local and global unread counts
         const newTotalUnread = Math.max(0, totalUnread - (chatRooms.find(r => r.id === chatId)?.unreadCount || 0));
         setTotalUnread(newTotalUnread);
         setProviderUnreadCount(newTotalUnread);
@@ -283,7 +277,6 @@ export default function ProviderChatList() {
   }, [chatRooms, totalUnread]);
 
   const handleChatPress = useCallback((item: ChatRoomWithParticipant) => {
-    // Update local UI immediately
     setChatRooms(prevRooms => 
       prevRooms.map(room => {
         if (room.id === item.id) {
@@ -296,15 +289,12 @@ export default function ProviderChatList() {
       })
     );
     
-    // Update total unread count for UI
     const newTotalUnread = Math.max(0, totalUnread - (item.unreadCount || 0));
     setTotalUnread(newTotalUnread);
     setProviderUnreadCount(newTotalUnread);
     
-    // Navigate immediately without waiting
     router.push(`/provider/chat/${item.id}?userId=${item.user_id}&role=provider`);
     
-    // Mark messages as read in the background after navigation
     setTimeout(() => {
       markMessagesAsRead(item.id).catch(error => {
         console.error('[ProviderChatList] Background update error:', error);
@@ -316,7 +306,6 @@ export default function ProviderChatList() {
     try {
       if (!profile?.id) return;
       
-      // Prevent multiple simultaneous fetches
       if (isFetchingRef.current) {
         console.log('[ProviderChatList] Fetch already in progress, skipping');
         return;
@@ -352,7 +341,6 @@ export default function ProviderChatList() {
 
       if (error) throw error;
       
-      // Update last fetch timestamp
       lastFetchTimeRef.current = Date.now();
       
       if (!data || data.length === 0) {
@@ -366,7 +354,8 @@ export default function ProviderChatList() {
       console.log(`[ProviderChatList] Fetched ${data.length} chat rooms`);
 
       const formattedRooms = data.map(room => {
-        // Sort messages by timestamp to ensure we get the latest message
+        const participant = room.user || { id: '', name: 'Unknown User', profile_pic: null, role: 'Unknown' };
+
         const sortedMessages = [...(room.chat_messages || [])].sort(
           (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
@@ -377,7 +366,6 @@ export default function ProviderChatList() {
           (msg: ChatMessage) => msg.sender_type === 'user' && !msg.is_read
         ).length || 0;
         
-        // Format the last message content based on message type
         let messageContent = lastMessage?.content || "Start a conversation";
         if (lastMessage?.type === 'image') {
           messageContent = "📷 Image";
@@ -391,7 +379,7 @@ export default function ProviderChatList() {
           }
         } else if (lastMessage?.type === 'voice') {
           const duration = lastMessage.duration ? 
-            parseInt(lastMessage.duration) / 1000 : // Convert to seconds
+            parseInt(lastMessage.duration) / 1000 : 
             0;
           const minutes = Math.floor(duration / 60);
           const seconds = Math.floor(duration % 60);
@@ -399,10 +387,8 @@ export default function ProviderChatList() {
           messageContent = `🎤 Voice note (${formattedDuration})`;
         }
         
-        // Create date object for the last message
         const messageDate = lastMessage?.created_at ? new Date(lastMessage.created_at) : null;
         
-        // Format the date string
         let formattedDate = null;
         if (messageDate) {
           const today = new Date();
@@ -414,18 +400,17 @@ export default function ProviderChatList() {
           } else if (messageDate.toDateString() === yesterday.toDateString()) {
             formattedDate = 'Yesterday';
           } else {
-            // Format date as MM/DD/YYYY for older messages
             formattedDate = messageDate.toLocaleDateString();
           }
         }
         
         return {
           ...room,
-          participant: room.user,
-          isOnline: false, // We could implement online status logic here
+          participant: participant, 
+          isOnline: false,
           unreadCount,
           last_message: isUserMessage ? 
-            `${room.user.name}: ${messageContent}` : 
+            `${room.user?.name || 'Unknown User'}: ${messageContent}` : 
             messageContent,
           lastMessageTime: messageDate ? 
             messageDate.toLocaleTimeString([], { 
@@ -436,8 +421,6 @@ export default function ProviderChatList() {
           formattedDate
         };
       });
-
-      // Sort messages by last message date (most recent first)
       formattedRooms.sort((a, b) => {
         if (!a.lastMessageDate) return 1;
         if (!b.lastMessageDate) return -1;
@@ -472,10 +455,8 @@ export default function ProviderChatList() {
     if (!profile?.id) return;
     
     fetchChatRooms();
-    // Call refreshUnreadCounts to ensure the notification dot is accurate
     refreshUnreadCounts('provider', profile.id);
     
-    // Subscribe to both chat_rooms and chat_messages changes
     const chatRoomsChannel = supabase
       .channel('provider_chat_updates')
       .on(
@@ -516,7 +497,6 @@ export default function ProviderChatList() {
     };
   }, [profile?.id, chatRooms.map(room => room.id).join(',')]);
 
-  // Update badge animations when unread counts change
   useEffect(() => {
     chatRooms.forEach(room => {
       if (room.unreadCount && room.unreadCount > 0) {
@@ -525,7 +505,6 @@ export default function ProviderChatList() {
     });
   }, [chatRooms.map(room => room.unreadCount).join(',')]);
 
-  // Memoize filtered chats to prevent unnecessary recalculations
   const filteredChats = useMemo(() => {
     switch (selectedTab) {
       case 'Unread':
@@ -582,7 +561,6 @@ export default function ProviderChatList() {
     </TouchableOpacity>
   ), [selectedTab, totalUnread, pulseAnim, isDark]);
 
-  // Memoize the renderChatItem function to prevent recreating for each render
   const renderChatItem = useCallback(({ item, index }: { item: ChatRoomWithParticipant; index: number }) => {
     const animatedStyle = setupItemAnimations(item.id, index);
     const badgeAnimStyle = setupBadgeAnimation(item.id, item.unreadCount);
@@ -611,7 +589,7 @@ export default function ProviderChatList() {
           <View style={styles.chatDetails}>
             <View style={styles.chatHeader}>
               <Text style={[styles.chatName, isDark && { color: colors.text }]}>
-                {item.participant?.name}
+                {item.participant?.name || 'Unknown User'}
               </Text>
               <View style={styles.timeContainer}>
                 {item.formattedDate && (
@@ -711,6 +689,17 @@ export default function ProviderChatList() {
     );
   }, [loading, chatRooms.length, isDark, colors, fadeLogoAnim]);
 
+  const listConfig = useMemo(() => ({
+    initialNumToRender: 10,
+    maxToRenderPerBatch: 10,
+    windowSize: 5,
+    removeClippedSubviews: true,
+    onEndReachedThreshold: 0.5,
+    getItemLayout: (data: any, index: number) => (
+      {length: 76, offset: 76 * index, index}
+    ),
+  }), []);
+
   return (
     <View style={[styles.container, { backgroundColor: isDark ? colors.secondaryBackground : '#fff' }]}>
       {renderHeader()}
@@ -741,7 +730,7 @@ export default function ProviderChatList() {
         windowSize={5}
         removeClippedSubviews={true}
         onEndReachedThreshold={0.5}
-        getItemLayout={(data, index) => (
+        getItemLayout={(data: any, index: number) => (
           {length: 76, offset: 76 * index, index}
         )}
       />

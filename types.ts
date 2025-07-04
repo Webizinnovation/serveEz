@@ -7,6 +7,8 @@ export interface UserProfile {
   profile_pic?: string;
   created_at?: string;
   wallet_balance?: number;
+  state?: string;
+  lga?: string;
 }
 
 export interface Provider {

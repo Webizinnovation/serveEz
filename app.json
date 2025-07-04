@@ -104,7 +104,8 @@
           "organization": "serveez"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true

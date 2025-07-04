@@ -16,9 +16,7 @@ import { useTheme } from "../components/ThemeProvider";
 import { supabase } from "../services/supabase";
 
 const { width } = Dimensions.get('window');
-// We'll use the more compact layout for all device sizes
 const COMPACT_LAYOUT = true;
-// Default duration for ads if not specified (in milliseconds)
 const DEFAULT_DISPLAY_DURATION = 5000;
 
 interface Banner {
@@ -32,18 +30,17 @@ interface Banner {
   actionText?: string;
   onPress?: () => void;
   isAdMob?: boolean;
-  // Dynamic banner fields
   isAd?: boolean;
   imageUrl?: string;
   adUrl?: string;
   trackingId?: string;
-  displayDuration?: number; // Duration to display in carousel in milliseconds
-  dottedBorder?: boolean; // Add a flag to determine if action button should have dotted border
+  displayDuration?: number; 
+  dottedBorder?: boolean; 
 }
 
 interface BannerSliderProps {
   profile?: UserProfile | null;
-  onSilentRefresh?: (silentRefresh: () => void) => void; // Add a callback function for silent refresh
+  onSilentRefresh?: (silentRefresh: () => void) => void; 
 }
 
 const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh }) => {
@@ -57,7 +54,6 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
   const flatListRef = useRef<FlatList>(null);
   const autoScrollTimer = useRef<NodeJS.Timeout | null>(null);
   
-  // Log when theme changes
   useEffect(() => {
     console.log('Theme changed, isDark:', isDark);
   }, [isDark]);
@@ -97,12 +93,10 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     [currentIndex]
   );
 
-  // Function to fetch advertisements from the backend
   const fetchAds = async (silent = false) => {
     if (!silent) setLoading(true);
     setAdError(false);
     try {
-      // Query active advertisements that haven't expired
       const { data, error } = await supabase
         .from('advertisements')
         .select('*')
@@ -113,21 +107,18 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
         throw error;
       }
       
-      // Filter out expired ads on the client side as well (as a backup to RLS)
       const now = new Date();
       const validAds = data.filter(ad => {
-        // Check if ad is within its valid date range
         const startDate = ad.start_date ? new Date(ad.start_date) : null;
         const endDate = ad.end_date ? new Date(ad.end_date) : null;
         
         const isActive = 
-          (!startDate || startDate <= now) && // Started or no start date
-          (!endDate || endDate >= now);       // Not ended or no end date
+          (!startDate || startDate <= now) &&
+          (!endDate || endDate >= now);  
         
         return isActive;
       });
       
-      // Transform backend data to match Banner interface
       const adBanners: Banner[] = validAds.map(ad => ({
         id: `ad-${ad.id}`,
         title: ad.title,
@@ -152,14 +143,12 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     }
   };
 
-  // Add a refresh function that can be called externally
   const silentRefresh = useCallback(async () => {
     console.log("Performing silent refresh of banners");
     const adBanners = await fetchAds(true);
     
     const staticBanners: Banner[] = [];
-    
-    // Add static banners if needed
+   
     if (profile?.id && !profile?.profile_pic) {
       staticBanners.push({
         id: "1",
@@ -200,7 +189,7 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
       subtitle: "Enjoy 40% discount on your\nfirst booking for new users",
       backgroundColor: isDark ? "#7E6B54" : "#C0A681",
       actionText: "ServeEz 01",
-      dottedBorder: true, // Add dotted border flag
+      dottedBorder: true, 
       SvgComponent: ({ animatedStyle, size = 80 }) => (
         <Animated.View style={animatedStyle}>
           <Discount width={size} height={size * 0.77} />
@@ -209,29 +198,24 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
       displayDuration: 4000,
     });
     
-    // Put ads first, then static banners
+ 
     const allBanners = [...adBanners, ...staticBanners];
     setCustomBanners(allBanners);
   }, [profile, router, isDark]);
 
-  // Expose the silentRefresh function to parent component via callback
   useEffect(() => {
     if (onSilentRefresh) {
-      // Pass the silentRefresh function to the parent via the callback
       onSilentRefresh(silentRefresh);
     }
   }, [silentRefresh, onSilentRefresh]);
 
-  // Handle ad click with tracking
   const handleAdClick = async (banner: Banner) => {
     if (!banner.isAd) {
-      // Handle normal banner clicks
       banner.onPress && banner.onPress();
       return;
     }
     
     try {
-      // Track the ad click
       if (banner.trackingId) {
         const { error } = await supabase
           .from('ad_clicks')
@@ -246,7 +230,6 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
         }
       }
       
-      // Open the ad URL
       if (banner.adUrl) {
         await Linking.openURL(banner.adUrl);
       }
@@ -255,7 +238,6 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     }
   };
 
-  // Auto-scroll to the next banner
   const scrollToNextBanner = () => {
     if (!autoScrollEnabled || customBanners.length === 0 || !flatListRef.current) return;
     
@@ -266,13 +248,11 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     });
   };
 
-  // Start auto-scroll timer with dynamic duration
   const startAutoScrollTimer = () => {
     if (autoScrollTimer.current) {
       clearTimeout(autoScrollTimer.current);
     }
     
-    // Use the duration of the current banner, or fall back to default
     const currentBanner = customBanners[currentIndex];
     const duration = currentBanner?.displayDuration || DEFAULT_DISPLAY_DURATION;
     
@@ -281,7 +261,6 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     }, duration);
   };
 
-  // Effect to handle auto-scrolling
   useEffect(() => {
     if (autoScrollEnabled && customBanners.length > 0) {
       startAutoScrollTimer();
@@ -294,15 +273,12 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     };
   }, [currentIndex, autoScrollEnabled, customBanners]);
 
-  // Load static and dynamic banners
   useEffect(() => {
     const loadBanners = async () => {
-      // Get dynamic ad banners first
       const adBanners = await fetchAds();
       
       const staticBanners: Banner[] = [];
       
-      // Add static banners if needed
       if (profile?.id && !profile?.profile_pic) {
         staticBanners.push({
           id: "1",
@@ -343,7 +319,7 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
         subtitle: "Enjoy 40% discount on your\nfirst booking for new users",
         backgroundColor: isDark ? "#7E6B54" : "#C0A681",
         actionText: "ServeEz 01",
-        dottedBorder: true, // Add dotted border flag
+        dottedBorder: true, 
         SvgComponent: ({ animatedStyle, size = 80 }) => (
           <Animated.View style={animatedStyle}>
             <Discount width={size} height={size * 0.77} />
@@ -352,7 +328,6 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
         displayDuration: 4000,
       });
       
-      // Put ads first, then static banners
       const allBanners = [...adBanners, ...staticBanners];
       setCustomBanners(allBanners);
     };
@@ -369,7 +344,6 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     transform: [{ translateY: translateYValue.value }],
   }));
 
-  // Render advertisement banner content
   const renderAdBanner = (item: Banner, animatedStyle: any) => {
     return (
       <View style={styles.bannerContent}>
@@ -393,7 +367,7 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     );
   };
 
-  // Render the right side of the banner (image or SVG icon)
+
   const renderBannerRight = (item: Banner) => {
     if (item.isAd && item.imageUrl) {
       return (
@@ -409,7 +383,7 @@ const BannerSlider: React.FC<BannerSliderProps> = ({ profile, onSilentRefresh })
     return null;
   };
 
-  // Handle errors when scrolling to an index
+
   const handleScrollToIndexFailed = (info: {
     index: number;
     highestMeasuredFrameIndex: number;
@@ -532,8 +506,8 @@ const styles = StyleSheet.create({
     left: -5,
     right: -5,
     bottom: -5,
-    width: width, // Use full screen width to ensure coverage
-    height: 180, // Make slightly larger than container
+    width: width, 
+    height: 180, 
     zIndex: 1,
   },
   backgroundOverlay: {

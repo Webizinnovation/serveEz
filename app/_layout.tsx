@@ -350,6 +350,14 @@ export default Sentry.wrap(function RootLayout() {
           }
         }
       } catch (navError) {
+        console.error('Navigation error in _layout.tsx useEffect:', navError);
+        Sentry.captureException(navError); // Capture error with Sentry
+        // Optionally, show a user-friendly error message
+        // Toast.show({
+        //   type: 'error',
+        //   text1: 'Navigation Error',
+        //   text2: 'An unexpected navigation error occurred.',
+        // });
       }
     });
   }, [isInitialized, isAuthenticated, isPhoneVerified, segments, safeNavigate, profile, user, fontLoadingComplete]);

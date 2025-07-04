@@ -1,4 +1,4 @@
-import React, { useState, useCallback, memo, useRef } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Linking, ActivityIndicator, Modal, Alert } from 'react-native';
 import { ScaledSheet } from 'react-native-size-matters';
 import { Colors } from '../../constants/Colors';
@@ -8,7 +8,6 @@ import Toast from 'react-native-toast-message';
 import * as FileSystem from 'expo-file-system';
 import { supabase } from '../../services/supabase';
 import { VoiceNote } from './VoiceNote';
-import { Swipeable } from 'react-native-gesture-handler';
 import { useUserStore } from '../../store/useUserStore';
 
 interface ChatMessageProps {
@@ -19,7 +18,6 @@ interface ChatMessageProps {
   onMessageDelete?: (messageId: string) => void;
   isDark?: boolean;
   colors?: any;
-  onReply?: (message: Message) => void;
 }
 
 const formatDate = (date: string) => {
@@ -28,21 +26,20 @@ const formatDate = (date: string) => {
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  // Format the time part
+  
   const time = messageDate.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true
   });
 
-  // Format the date part
+
   const dateStr = messageDate.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: messageDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
   });
 
-  // Always include the date and time
   if (messageDate.toDateString() === today.toDateString()) {
     return `Today ${dateStr}, ${time}`;
   } else if (messageDate.toDateString() === yesterday.toDateString()) {
@@ -78,7 +75,6 @@ const getFileIcon = (fileName: string) => {
   }
 };
 
-// Memoize the ChatMessage component to prevent unnecessary re-renders
 export const ChatMessage = memo(({ 
   message, 
   isOwnMessage, 
@@ -87,7 +83,6 @@ export const ChatMessage = memo(({
   onMessageDelete,
   isDark,
   colors,
-  onReply
 }: ChatMessageProps) => {
   const [imageLoading, setImageLoading] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -96,10 +91,8 @@ export const ChatMessage = memo(({
   const isImage = message.type === 'image';
   const isFile = message.type === 'file';
   const isVoice = message.type === 'voice';
-  const swipeableRef = useRef<Swipeable>(null);
   const { profile } = useUserStore();
-  
-  // Use useCallback for event handlers to prevent recreation on each render
+
   const handleLongPress = useCallback(() => {
     if (!isOwnMessage || deleting) return;
 
@@ -125,8 +118,7 @@ export const ChatMessage = memo(({
 
     try {
       setDeleting(true);
-      
-      // Verify that the user has permission to delete this message
+   
       if (message.sender_id !== profile?.id) {
         console.error('Cannot delete message: User ID does not match sender ID');
         Toast.show({
@@ -139,7 +131,6 @@ export const ChatMessage = memo(({
         return;
       }
 
-      // Delete file from storage if applicable
       if ((isFile || isImage || isVoice) && message.content) {
         try {
           const fileUrl = new URL(message.content);
@@ -160,28 +151,24 @@ export const ChatMessage = memo(({
         }
       }
       
-      // Attempt database deletion
       const { error: dbError, data } = await supabase
         .from('chat_messages')
         .delete()
         .eq('id', message.id)
-        .eq('sender_id', profile?.id) // Ensure sender_id matches profile ID for RLS
-        .select('id'); // Return deleted record to confirm deletion
+        .eq('sender_id', profile?.id) 
+        .select('id');
 
       if (dbError) {
         console.error('Error deleting message from database:', dbError);
         throw dbError;
       } 
       
-      // Verify deletion was successful
       if (!data || data.length === 0) {
         console.warn('Message may not have been deleted from database - no records returned');
-        // Continue anyway since we want to remove it from UI
       } else {
         console.log('Successfully deleted message from database:', message.id);
       }
 
-      // Update local UI state
       if (onMessageDelete) {
         onMessageDelete(message.id);
       }
@@ -254,7 +241,7 @@ export const ChatMessage = memo(({
     }
   }, [message.content, message.file_name, isImage]);
 
-  // Render reply content if this message is a reply
+
   const renderReplyContent = () => {
     if (!message.replied_to_content) return null;
     
@@ -281,29 +268,6 @@ export const ChatMessage = memo(({
     );
   };
 
-  // Render the right actions for received messages
-  const renderRightActions = useCallback(() => {
-    // Return a completely transparent view with no icon
-    return (
-      <View style={{
-        width: 50,
-        backgroundColor: 'transparent'
-      }} />
-    );
-  }, []);
-
-  // Render the left actions for own messages
-  const renderLeftActions = useCallback(() => {
-    // Return a completely transparent view with no icon
-    return (
-      <View style={{
-        width: 50,
-        backgroundColor: 'transparent'
-      }} />
-    );
-  }, []);
-
-  // Empty function for when we don't want to render actions
   const renderEmptyActions = useCallback(() => null, []);
 
   const messageContent = (
@@ -514,61 +478,9 @@ export const ChatMessage = memo(({
     </View>
   );
 
-  // If we have an onReply handler, wrap the message in a Swipeable component
-  if (onReply) {
-    if (isOwnMessage) {
-      // For own messages, enable left swipe only
-      return (
-        <Swipeable
-          ref={swipeableRef}
-          renderLeftActions={renderLeftActions}
-          onSwipeableLeftOpen={() => {
-            onReply(message);
-            // Close the swipeable immediately
-            setTimeout(() => {
-              swipeableRef.current?.close();
-            }, 100);
-          }}
-          friction={1}
-          leftThreshold={30}
-          overshootLeft={true}
-          overshootRight={false}
-          enabled={true}
-          enableTrackpadTwoFingerGesture
-        >
-          {messageContent}
-        </Swipeable>
-      );
-    } else {
-      // For received messages, enable right swipe only
-      return (
-        <Swipeable
-          ref={swipeableRef}
-          renderRightActions={renderRightActions}
-          onSwipeableRightOpen={() => {
-            onReply(message);
-            // Close the swipeable immediately
-            setTimeout(() => {
-              swipeableRef.current?.close();
-            }, 100);
-          }}
-          friction={1}
-          rightThreshold={30}
-          overshootLeft={false}
-          overshootRight={true}
-          enabled={true}
-          enableTrackpadTwoFingerGesture
-        >
-          {messageContent}
-        </Swipeable>
-      );
-    }
-  }
 
-  // Otherwise just return the message content
   return messageContent;
 }, (prevProps, nextProps) => {
-  // Memoization comparison function - only re-render if these props changed
   return (
     prevProps.message.id === nextProps.message.id &&
     prevProps.message.is_read === nextProps.message.is_read &&

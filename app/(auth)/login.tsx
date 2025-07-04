@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
-  KeyboardAvoidingView,
   useColorScheme,
   Pressable,
 } from 'react-native';
@@ -33,6 +32,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const { width, height } = Dimensions.get('window');
 
+// Define the props interface for the SocialButton component
 interface SocialButtonProps {
   icon: string;
   text: string;
@@ -119,6 +119,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
 
 
@@ -153,16 +154,13 @@ export default function Login() {
   const handleLogin = async () => {
     try {
       if (!email || !password) {
-        Toast.show({
-          type: 'error',
-          text1: 'Missing Information',
-          text2: 'Please fill in all fields to log in.',
-        });
+        setError('Please fill in all fields');
         return;
       }
 
       setLoading(true);
       setShowLoadingOverlay(true);
+      setError(null);
 
       // First sign in with Supabase Auth
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -172,24 +170,16 @@ export default function Login() {
 
       if (signInError) {
         if (signInError.message.includes('Email not confirmed')) {
-          Toast.show({
-            type: 'error',
-            text1: 'Email Not Confirmed',
-            text2: 'Please check your email to confirm your account.',
-          });
+          setError('Please check your email and confirm your account before signing in');
         } else {
-          Toast.show({ type: 'error', text1: 'Login Failed', text2: signInError.message });
+          setError(signInError.message || 'An error occurred during sign-in');
         }
         setShowLoadingOverlay(false);
         return;
       }
 
       if (!signInData.user) {
-        Toast.show({
-          type: 'error',
-          text1: 'Login Error',
-          text2: 'An unexpected error occurred. Please try again.',
-        });
+        setError('No user returned from sign-in');
         setShowLoadingOverlay(false);
         return;
       }
@@ -260,6 +250,7 @@ export default function Login() {
       // Check if phone verification is needed
       const needsPhoneVerification = !userProfile?.phone_verified && userProfile?.phone;
       
+      /* Temporarily disabled phone verification
       if (needsPhoneVerification) {
         console.log('User needs phone verification, redirecting to verify-otp');
         
@@ -273,16 +264,15 @@ export default function Login() {
         });
       } else {
         // User is fully verified, navigate to the main app
-        Toast.show({
-          type: 'success',
-          text1: 'Login Successful',
-          text2: 'Welcome back!',
-        });
         router.replace('/');
       }
+      */
+      
+      // Always navigate to main app (phone verification disabled)
+      router.replace('/');
     } catch (error: any) {
       console.error('Login error:', error);
-      Toast.show({ type: 'error', text1: 'Login Error', text2: error.message || 'An unexpected error occurred' });
+      setError(error.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
       // Keep the loading overlay a bit longer until navigation completes
@@ -452,6 +442,7 @@ export default function Login() {
                     }
                     
                     // Step 2: Check if phone verification is required
+                    /* Temporarily disabled phone verification
                     if (userData.phone_verified === false && userData.phone) {
                       console.log('[handleGoogleSignIn] Phone verification required');
                       Toast.show({
@@ -473,6 +464,7 @@ export default function Login() {
                       }, 1500);
                       return;
                     }
+                    */
                     
                     // Step 3: Final verification before redirect
                     console.log('[handleGoogleSignIn] Performing final role verification before redirect');
@@ -660,314 +652,277 @@ export default function Login() {
         </View>
       </View>
     ),
-    error: (props: any) => (
-      <View style={{
-        width: '90%',
-        backgroundColor: isDark ? colors.cardBackground : '#fff',
-        padding: 20,
-        borderRadius: 12,
-        borderLeftWidth: 4,
-        borderLeftColor: '#EF4444',
-        shadowColor: isDark ? '#000' : '#000',
-        shadowOffset: {
-          width: 0,
-          height: 2,
-        },
-        shadowOpacity: isDark ? 0.4 : 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-      }}>
-        <MaterialIcons name="error" size={30} color="#EF4444" />
-        <View style={{ flex: 1 }}>
-          <Text style={{
-            fontSize: 18,
-            fontFamily: 'Urbanist-Bold',
-            color: isDark ? colors.text : '#333',
-            marginBottom: 4,
-          }}>{props.text1}</Text>
-          <Text style={{ fontSize: 14, fontFamily: 'Urbanist-Regular', color: isDark ? colors.subtext : '#666' }}>{props.text2}</Text>
-        </View>
-      </View>
-    ),
   };
 
   return (
     <>
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.background : Colors.primary }]}>
         <LoadingOverlay visible={showLoadingOverlay} />
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <ScrollView>
-            <StatusBar backgroundColor={isDark ? colors.background : Colors.primary} barStyle={isDark ? "light-content" : "light-content"} />
+        <ScrollView>
+          <StatusBar backgroundColor={isDark ? colors.background : Colors.primary} barStyle={isDark ? "light-content" : "light-content"} />
 
-            <Link href="/onboarding/getStarted" style={styles.backLink}>
-              <FontAwesome name="arrow-left" size={24} color={isDark ? colors.text : "white"} />
-            </Link>
+          <Link href="/onboarding/getStarted" style={styles.backLink}>
+            <FontAwesome name="arrow-left" size={24} color={isDark ? colors.text : "white"} />
+          </Link>
 
-            <View style={[styles.header, { backgroundColor: isDark ? colors.background : Colors.primary }]}>
-              <Animated.View 
-                entering={FadeInDown.duration(800).springify()}
-                style={styles.logoContainer}
+          <View style={[styles.header, { backgroundColor: isDark ? colors.background : Colors.primary }]}>
+            <Animated.View 
+              entering={FadeInDown.duration(800).springify()}
+              style={styles.logoContainer}
+            >
+              <Logo width={111} height={111} style={[styles.logo, { backgroundColor: isDark ? colors.cardBackground : "white" }]} />
+            </Animated.View>
+
+            <Animated.View 
+              entering={FadeInDown.delay(200).duration(800).springify()}
+              style={styles.roleSelector}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.roleButton, 
+                  role === 'user' && [
+                    styles.activeRole, 
+                    { backgroundColor: isDark ? colors.cardBackground : 'white' }
+                  ]
+                ]}
+                onPress={() => setRole('user')}
               >
-                <Logo width={111} height={111} style={[styles.logo, { backgroundColor: isDark ? colors.cardBackground : "white" }]} />
-              </Animated.View>
-
-              <Animated.View 
-                entering={FadeInDown.delay(200).duration(800).springify()}
-                style={styles.roleSelector}
-              >
-                <TouchableOpacity
+                <Ionicons 
+                  name="person" 
+                  size={16} 
+                  color={role === 'user' ? 
+                    (isDark ? colors.tint : Colors.primary) : 
+                    (isDark ? colors.text : 'white')} 
+                  style={styles.roleIcon}
+                />
+                <Text 
                   style={[
-                    styles.roleButton, 
+                    styles.roleText, 
+                    { color: isDark ? colors.text : 'white' },
                     role === 'user' && [
-                      styles.activeRole, 
-                      { backgroundColor: isDark ? colors.cardBackground : 'white' }
+                      styles.activeRoleText, 
+                      { color: isDark ? colors.tint : Colors.primary }
                     ]
                   ]}
-                  onPress={() => setRole('user')}
                 >
-                  <Ionicons 
-                    name="person" 
-                    size={16} 
-                    color={role === 'user' ? 
-                      (isDark ? colors.tint : Colors.primary) : 
-                      (isDark ? colors.text : 'white')} 
-                    style={styles.roleIcon}
-                  />
-                  <Text 
-                    style={[
-                      styles.roleText, 
-                      { color: isDark ? colors.text : 'white' },
-                      role === 'user' && [
-                        styles.activeRoleText, 
-                        { color: isDark ? colors.tint : Colors.primary }
-                      ]
-                    ]}
-                  >
-                    User
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                  User
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.roleButton, 
+                  role === 'provider' && [
+                    styles.activeRole, 
+                    { backgroundColor: isDark ? colors.cardBackground : 'white' }
+                  ]
+                ]}
+                onPress={() => setRole('provider')}
+              >
+                <MaterialCommunityIcons 
+                  name="briefcase-outline" 
+                  size={16}
+                  color={role === 'provider' ? 
+                    (isDark ? colors.tint : Colors.primary) : 
+                    (isDark ? colors.text : 'white')}
+                  style={styles.roleIcon}
+                />
+                <Text 
                   style={[
-                    styles.roleButton, 
+                    styles.roleText, 
+                    { color: isDark ? colors.text : 'white' },
                     role === 'provider' && [
-                      styles.activeRole, 
-                      { backgroundColor: isDark ? colors.cardBackground : 'white' }
+                      styles.activeRoleText, 
+                      { color: isDark ? colors.tint : Colors.primary }
                     ]
                   ]}
-                  onPress={() => setRole('provider')}
                 >
+                  Provider
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <View style={[styles.formContainer, { 
+              backgroundColor: isDark ? colors.cardBackground : 'white',
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30, 
+            }]}>
+              <Animated.Text
+                entering={FadeInDown.duration(800).springify()}
+                style={[styles.title, { color: isDark ? colors.text : Colors.primary }]}
+              >
+                Welcome Back! 
+              </Animated.Text>
+
+              <Animated.View 
+                entering={FadeInRight.delay(300).duration(800).springify()}
+                style={styles.inputGroup}
+              >
+                <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Email</Text>
+                <View style={[styles.inputContainer, { 
+                  backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                  borderWidth: 1,
+                  borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+                }]}>
                   <MaterialCommunityIcons 
-                    name="briefcase-outline" 
-                    size={16}
-                    color={role === 'provider' ? 
-                      (isDark ? colors.tint : Colors.primary) : 
-                      (isDark ? colors.text : 'white')}
-                    style={styles.roleIcon}
+                    name="email-outline" 
+                    size={20} 
+                    color={isDark ? colors.subtext : "#666"} 
+                    style={styles.inputIcon}
                   />
-                  <Text 
-                    style={[
-                      styles.roleText, 
-                      { color: isDark ? colors.text : 'white' },
-                      role === 'provider' && [
-                        styles.activeRoleText, 
-                        { color: isDark ? colors.tint : Colors.primary }
-                      ]
-                    ]}
-                  >
-                    Provider
-                  </Text>
-                </TouchableOpacity>
+                  <TextInput
+                    style={[styles.input, { 
+                      backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                      color: isDark ? "white" : '#000'
+                    }]}
+                    placeholder="Enter your email"
+                    placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "#666"}
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    inputAccessoryViewID="loginEmail"
+                    disableFullscreenUI={true}
+                    theme={{
+                      colors: {
+                        primary: isDark ? colors.tint : Colors.primary,
+                        text: isDark ? "white" : '#000',
+                        placeholder: isDark ? "rgba(255,255,255,0.6)" : '#666',
+                        background: isDark ? colors.secondaryBackground : "#D9D9D9"
+                      }
+                    }}
+                  />
+                </View>
               </Animated.View>
 
-              <View style={[styles.formContainer, { 
-                backgroundColor: isDark ? colors.cardBackground : 'white',
-                borderTopLeftRadius: 30,
-                borderTopRightRadius: 30, 
-              }]}>
-                <Animated.Text
-                  entering={FadeInDown.duration(800).springify()}
-                  style={[styles.title, { color: isDark ? colors.text : Colors.primary }]}
-                >
-                  Welcome Back! 
-                </Animated.Text>
-
-                <Animated.View 
-                  entering={FadeInRight.delay(300).duration(800).springify()}
-                  style={styles.inputGroup}
-                >
-                  <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Email</Text>
-                  <View style={[styles.inputContainer, { 
-                    backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                    borderWidth: 1,
-                    borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
-                  }]}>
-                    <MaterialCommunityIcons 
-                      name="email-outline" 
-                      size={20} 
-                      color={isDark ? colors.subtext : "#666"} 
-                      style={styles.inputIcon}
+              <Animated.View 
+                entering={FadeInRight.delay(400).duration(800).springify()}
+                style={styles.inputGroup}
+              >
+                <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Password</Text>
+                <View style={[styles.passwordContainer, { 
+                  backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                  borderWidth: 1,
+                  borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
+                }]}>
+                  <Ionicons 
+                    name="lock-closed-outline" 
+                    size={20} 
+                    color={isDark ? colors.subtext : "#666"} 
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, { 
+                      backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
+                      color: isDark ? "white" : '#000'
+                    }]}
+                    placeholder="Enter your password"
+                    placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "#666"}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!isPasswordVisible}
+                    autoComplete="password"
+                    textContentType="password"
+                    inputAccessoryViewID="loginPassword"
+                    disableFullscreenUI={true}
+                    theme={{
+                      colors: {
+                        primary: isDark ? colors.tint : Colors.primary,
+                        text: isDark ? "white" : '#000',
+                        placeholder: isDark ? "rgba(255,255,255,0.6)" : '#666',
+                        background: isDark ? colors.secondaryBackground : "#D9D9D9"
+                      }
+                    }}
+                  />
+                  <TouchableOpacity onPress={togglePasswordVisibility} style={styles.eyeButton}>
+                    <FontAwesome
+                      name={isPasswordVisible ? "eye" : "eye-slash"}
+                      size={18}
+                      color={isDark ? colors.subtext : "#666"}
                     />
-                    <TextInput
-                      style={[styles.input, { 
-                        backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                        color: isDark ? "white" : '#000'
-                      }]}
-                      placeholder="Enter your email"
-                      placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "#666"}
-                      value={email}
-                      onChangeText={setEmail}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      autoComplete="email"
-                      textContentType="emailAddress"
-                      inputAccessoryViewID="loginEmail"
-                      disableFullscreenUI={true}
-                      theme={{
-                        colors: {
-                          primary: isDark ? colors.tint : Colors.primary,
-                          text: isDark ? "white" : '#000',
-                          placeholder: isDark ? "rgba(255,255,255,0.6)" : '#666',
-                          background: isDark ? colors.secondaryBackground : "#D9D9D9"
-                        }
-                      }}
-                    />
-                  </View>
-                </Animated.View>
-
-                <Animated.View 
-                  entering={FadeInRight.delay(400).duration(800).springify()}
-                  style={styles.inputGroup}
-                >
-                  <Text style={[styles.inputLabel, { color: isDark ? colors.text : '#333' }]}>Password</Text>
-                  <View style={[styles.passwordContainer, { 
-                    backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                    borderWidth: 1,
-                    borderColor: isDark ? 'transparent' : 'rgba(0,0,0,0.05)'
-                  }]}>
-                    <Ionicons 
-                      name="lock-closed-outline" 
-                      size={20} 
-                      color={isDark ? colors.subtext : "#666"} 
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={[styles.input, { 
-                        backgroundColor: isDark ? colors.secondaryBackground : "#D9D9D9",
-                        color: isDark ? "white" : '#000'
-                      }]}
-                      placeholder="Enter your password"
-                      placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "#666"}
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={!isPasswordVisible}
-                      autoComplete="password"
-                      textContentType="password"
-                      inputAccessoryViewID="loginPassword"
-                      disableFullscreenUI={true}
-                      theme={{
-                        colors: {
-                          primary: isDark ? colors.tint : Colors.primary,
-                          text: isDark ? "white" : '#000',
-                          placeholder: isDark ? "rgba(255,255,255,0.6)" : '#666',
-                          background: isDark ? colors.secondaryBackground : "#D9D9D9"
-                        }
-                      }}
-                    />
-                    <TouchableOpacity onPress={togglePasswordVisibility} style={styles.eyeButton}>
-                      <FontAwesome
-                        name={isPasswordVisible ? "eye" : "eye-slash"}
-                        size={18}
-                        color={isDark ? colors.subtext : "#666"}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </Animated.View>
-
-                <View style={styles.forgotPasswordContainer}>
-                  <TouchableOpacity 
-                    onPress={() => router.push('/(auth)/reset-password')}
-                  >
-                    <Text style={[styles.forgotPassword, { color: isDark ? colors.tint : Colors.primary }]}>
-                      <MaterialIcons name="help-outline" size={14} color={isDark ? colors.tint : Colors.primary} /> Forgot Password?
-                    </Text>
                   </TouchableOpacity>
                 </View>
+              </Animated.View>
 
-                <Animated.View entering={FadeInDown.delay(500).duration(800).springify()}>
-                  <Button 
-                    mode="contained"
-                    onPress={handleLogin}
-                    loading={loading}
-                    disabled={loading || googleLoading}
-                    style={[styles.loginButton, { 
-                      backgroundColor: isDark ? colors.tint : "#00456C",
-                      borderRadius: 12,
-                      elevation: 4
-                    }]}
-                    contentStyle={styles.buttonContent}
-                    icon={() => <Ionicons name="log-in-outline" size={20} color="white" />}
-                  >
-                    {loading ? 'Logging in...' : `Login as ${role === 'user' ? 'User' : 'Provider'}`}
-                  </Button>
-                </Animated.View>
-                    
-                <Animated.View 
-                  entering={FadeInDown.delay(600).duration(800).springify()}
-                  style={styles.dividerContainer}
+              <View style={styles.forgotPasswordContainer}>
+                <TouchableOpacity 
+                  onPress={() => router.push('/(auth)/reset-password')}
                 >
-                  <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E0E0E0' }]} />
-                  <Text style={[styles.dividerText, { color: isDark ? colors.subtext : '#666' }]}>or continue with</Text>
-                  <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E0E0E0' }]} />
-                </Animated.View>
-
-                <Animated.View 
-                  entering={FadeInDown.delay(700).duration(800).springify()}
-                  style={styles.socialLinks}
-                >
-                  <SocialButton
-                    icon="google"
-                    text="Google"
-                    color="#DB4437"
-                    onPress={handleGoogleSignIn}
-                    loading={googleLoading}
-                    disabled={loading || googleLoading}
-                  />
-                  
-                  <SocialButton
-                    icon="apple"
-                    text="Apple"
-                    color={isDark ? "#fff" : "#000000"}
-                    onPress={() => {
-                      Toast.show({
-                        type: 'info',
-                        text1: 'Coming Soon',
-                        text2: 'Apple Sign-in will be available in the next update!',
-                        position: 'bottom',
-                        visibilityTime: 3000,
-                      });
-                    }}
-                    loading={false}
-                    disabled={loading || googleLoading}
-                  />
-                </Animated.View>
-
-                <Link href="/(auth)/signup" asChild>
-                  <TouchableOpacity style={styles.signupLink}>
-                    <Text style={[styles.signupText, { color: isDark ? colors.subtext : '#666' }]}>
-                      Don't have an account? <Text style={[styles.signupHighlight, { color: isDark ? colors.tint : Colors.primary }]}>Sign up</Text>
-                    </Text>
-                  </TouchableOpacity>
-                </Link>
+                  <Text style={[styles.forgotPassword, { color: isDark ? colors.tint : Colors.primary }]}>
+                    <MaterialIcons name="help-outline" size={14} color={isDark ? colors.tint : Colors.primary} /> Forgot Password?
+                  </Text>
+                </TouchableOpacity>
               </View>
+
+              <Animated.View entering={FadeInDown.delay(500).duration(800).springify()}>
+                <Button 
+                  mode="contained"
+                  onPress={handleLogin}
+                  loading={loading}
+                  disabled={loading || googleLoading}
+                  style={[styles.loginButton, { 
+                    backgroundColor: isDark ? colors.tint : "#00456C",
+                    borderRadius: 12,
+                    elevation: 4
+                  }]}
+                  contentStyle={styles.buttonContent}
+                  icon={() => <Ionicons name="log-in-outline" size={20} color="white" />}
+                >
+                  {loading ? 'Logging in...' : `Login as ${role === 'user' ? 'User' : 'Provider'}`}
+                </Button>
+              </Animated.View>
+
+              <Animated.View 
+                entering={FadeInDown.delay(600).duration(800).springify()}
+                style={styles.dividerContainer}
+              >
+                <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E0E0E0' }]} />
+                <Text style={[styles.dividerText, { color: isDark ? colors.subtext : '#666' }]}>or continue with</Text>
+                <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E0E0E0' }]} />
+              </Animated.View>
+
+              <Animated.View 
+                entering={FadeInDown.delay(700).duration(800).springify()}
+                style={styles.socialLinks}
+              >
+                <SocialButton
+                  icon="google"
+                  text="Google"
+                  color="#DB4437"
+                  onPress={handleGoogleSignIn}
+                  loading={googleLoading}
+                  disabled={loading || googleLoading}
+                />
+                
+                <SocialButton
+                  icon="apple"
+                  text="Apple"
+                  color={isDark ? "#fff" : "#000000"}
+                  onPress={() => {
+                    Toast.show({
+                      type: 'info',
+                      text1: 'Coming Soon',
+                      text2: 'Apple Sign-in will be available in the next update!',
+                      position: 'bottom',
+                      visibilityTime: 3000,
+                    });
+                  }}
+                  loading={false}
+                  disabled={loading || googleLoading}
+                />
+              </Animated.View>
+
+              <Link href="/(auth)/signup" asChild>
+                <TouchableOpacity style={styles.signupLink}>
+                  <Text style={[styles.signupText, { color: isDark ? colors.subtext : '#666' }]}>
+                    Don't have an account? <Text style={[styles.signupHighlight, { color: isDark ? colors.tint : Colors.primary }]}>Sign up</Text>
+                  </Text>
+                </TouchableOpacity>
+              </Link>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          </View>
+        </ScrollView>
       </SafeAreaView>
       <Toast config={toastConfig} />
     </>

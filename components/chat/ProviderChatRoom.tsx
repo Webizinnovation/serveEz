@@ -18,6 +18,8 @@ import Logo from '../../assets/images/Svg/logo1.svg';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { sendChatMessageNotification } from '../../services/pushNotifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Define screen size constants
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -83,6 +85,9 @@ export default function ProviderChatRoom() {
   const fadeAnim = useRef(new Animated.Value(0.3)).current;
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   // App state change handler
   useEffect(() => {
@@ -1206,16 +1211,6 @@ export default function ProviderChatRoom() {
     setMessages(prevMessages => prevMessages.filter(msg => msg.id !== messageId));
   }, []);
 
-  // Handle reply to message
-  const handleReplyToMessage = useCallback((message: Message) => {
-    setReplyTo(message);
-  }, []);
-
-  // Cancel reply
-  const cancelReply = useCallback(() => {
-    setReplyTo(null);
-  }, []);
-
   const renderHeader = useCallback(() => (
     <View style={[styles.header, isDark && { backgroundColor: '#0066CC' }]}>
       <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -1229,8 +1224,8 @@ export default function ProviderChatRoom() {
           fadeDuration={300}
         />
         <View>
-          <Text style={styles.userName}>{user?.name}</Text>
-          <Text style={styles.userRole}>{user?.role || 'User'}</Text>
+          <Text style={styles.userName}>{user?.name || 'Loading...'}</Text>
+          <Text style={styles.userRole}>{user?.role || 'Loading...'}</Text>
         </View>
       </View>
       {isMarkingRead && (
@@ -1269,14 +1264,13 @@ export default function ProviderChatRoom() {
         isOwnMessage={isOwn}
         onMessageDelete={handleMessageDelete}
         isDark={isDark}
-        onReply={handleReplyToMessage}
         colors={colors}
         // Use user info for display name when the message is from the user (not the provider)
         senderName={!isOwn ? user?.name || 'User' : 'You'}
         senderImage={!isOwn ? user?.profile_pic : undefined}
       />
     );
-  }, [profile?.id, handleMessageDelete, isDark, handleReplyToMessage, colors, user?.name, user?.profile_pic]);
+  }, [profile?.id, handleMessageDelete, isDark, colors, user?.name, user?.profile_pic]);
 
   const keyExtractor = useCallback((item: Message) => `message-${item.id}`, []);
 
@@ -1292,11 +1286,6 @@ export default function ProviderChatRoom() {
     windowSize: 8, // Smaller window size for better performance
     updateCellsBatchingPeriod: 100, // Longer batching period means fewer updates
     removeClippedSubviews: Platform.OS !== 'web', // Helps performance on mobile but can cause issues on web
-    maintainVisibleContentPosition: {
-      minIndexForVisible: 0,
-      autoscrollToTopThreshold: 10,
-    },
-    getItemLayout: getItemLayout, // Use the improved getItemLayout function
     onEndReachedThreshold: 0.2, // Load more when closer to the end
     scrollEventThrottle: 32, // Optimize scroll performance
     keyboardShouldPersistTaps: 'handled' as const,
@@ -1417,37 +1406,6 @@ export default function ProviderChatRoom() {
         isDark && { backgroundColor: '#222' },
         isSending && styles.inputContainerDisabled
       ]}>
-        {replyTo && (
-          <View style={[
-            styles.replyPreview,
-            isDark && { 
-              backgroundColor: '#333',
-              borderColor: '#444'
-            }
-          ]}>
-            <View style={styles.replyPreviewContent}>
-              <View style={styles.replyPreviewBar} />
-              <View style={styles.replyPreviewTextContainer}>
-                <Text 
-                  style={[
-                    styles.replyPreviewText,
-                    { color: '#333' }, 
-                    isDark && { color: '#fff' }
-                  ]} 
-                  numberOfLines={1} 
-                  ellipsizeMode="tail"
-                >
-                  {replyTo.content.length > 40 
-                    ? replyTo.content.substring(0, 40) + '...' 
-                    : replyTo.content}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={cancelReply} style={styles.replyPreviewClose}>
-              <Ionicons name="close" size={20} color={isDark ? "#aaa" : "#999"} />
-            </TouchableOpacity>
-          </View>
-        )}
         <View style={styles.inputActionsContainer}>
           <TouchableOpacity 
             style={[styles.attachButton, isSending && styles.buttonDisabled]} 
@@ -1514,11 +1472,7 @@ export default function ProviderChatRoom() {
         </View>
       </View>
     );
-  }, [
-    newMessage, handleInputChange, handleSendMessage, toggleVoiceRecorder,
-    showVoiceRecorder, isDark, colors.text, isSending, pickDocument,
-    handleRecordingComplete, handleCancelRecording, replyTo, cancelReply
-  ]);
+  }, [newMessage, handleInputChange, handleSendMessage, toggleVoiceRecorder, showVoiceRecorder, isDark, colors.text, isSending, pickDocument, handleRecordingComplete, handleCancelRecording]);
 
   // Optimize animations with useRef and proper cleanup
   const setupAnimations = useCallback(() => {
@@ -1571,33 +1525,34 @@ export default function ProviderChatRoom() {
       ]}>
         {renderHeader()}
         {renderSecurityWarning()}
+        <View style={[
+          styles.chatBackground, 
+          isDark && { backgroundColor: colors.cardBackground }
+        ]}>
+          {renderLoading()}
+          <FlatList
+            ref={flatListRef}
+            data={messagesData}
+            inverted
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={styles.messagesList}
+            onEndReached={handleLoadMore}
+            ListFooterComponent={isLoading && hasMore ? (
+              <ActivityIndicator 
+                size="small" 
+                color={isDark ? colors.tint : Colors.primary} 
+                style={styles.loadingMore} 
+              />
+            ) : null}
+            {...listConfig}
+          />
+        </View>
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.bottom : 0}
+          style={{ width: '100%' }}
         >
-          <View style={[
-            styles.chatBackground, 
-            isDark && { backgroundColor: colors.cardBackground }
-          ]}>
-            {renderLoading()}
-            <FlatList
-              ref={flatListRef}
-              data={messagesData}
-              inverted
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              contentContainerStyle={styles.messagesList}
-              onEndReached={handleLoadMore}
-              ListFooterComponent={isLoading && hasMore ? (
-                <ActivityIndicator 
-                  size="small" 
-                  color={isDark ? colors.tint : Colors.primary} 
-                  style={styles.loadingMore} 
-                />
-              ) : null}
-              {...listConfig}
-            />
-          </View>
           {renderInputBar()}
         </KeyboardAvoidingView>
       </View>
@@ -1759,39 +1714,6 @@ const styles = StyleSheet.create({
   sendingIndicator: {
     position: 'absolute',
     right: 10,
-  },
-  replyPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    backgroundColor: '#f0f0f0',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    width: '100%',
-  },
-  replyPreviewContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  replyPreviewBar: {
-    width: 2,
-    height: '100%',
-    backgroundColor: Colors.primary,
-    marginRight: 8,
-  },
-  replyPreviewTextContainer: {
-    flex: 1,
-  },
-  replyPreviewText: {
-    fontSize: 13,
-    fontFamily: 'Urbanist-Regular',
-    fontWeight: '500',
-    color: '#333',
-    paddingVertical: 4,
-  },
-  replyPreviewClose: {
-    padding: 5,
   },
   inputActionsContainer: {
     flexDirection: 'row',
