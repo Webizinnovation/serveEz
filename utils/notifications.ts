@@ -8,7 +8,7 @@ import { supabase } from '../services/supabase';
  */
 export const getNotificationUserId = async (id: string): Promise<string | null> => {
   try {
-    // First check if this is a user ID
+    //  user ID
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('id')
@@ -19,7 +19,7 @@ export const getNotificationUserId = async (id: string): Promise<string | null> 
       return user.id;
     }
     
-    // If not a user ID, check if it's a provider ID
+    // provider ID
     const { data: provider, error: providerError } = await supabase
       .from('providers')
       .select('users!inner(id)')
@@ -30,7 +30,7 @@ export const getNotificationUserId = async (id: string): Promise<string | null> 
       return (provider.users as any).id;
     }
     
-    // Also check if this is a user ID in the providers table
+    //  user ID in the providers table
     const { data: providerByUser, error: providerByUserError } = await supabase
       .from('providers')
       .select('users!inner(id)')
@@ -64,7 +64,6 @@ export const createUserNotification = async (
   referenceId?: string
 ): Promise<boolean> => {
   try {
-    // Get the correct user ID for notifications
     const notificationUserId = await getNotificationUserId(userId);
     
     if (!notificationUserId) {
@@ -107,7 +106,6 @@ export const sendBookingStatusNotification = async (
   serviceName?: string
 ): Promise<boolean> => {
   try {
-    // Skip if userId is not provided
     if (!userId) {
       console.warn('Cannot send notification: No user ID provided');
       return false;
@@ -168,7 +166,7 @@ export const updateBookingStatus = async (
       .update({ 
         status, 
         updated_at: new Date().toISOString(),
-        is_viewed: false // Reset viewed status when status changes
+        is_viewed: false
       })
       .eq('id', bookingId);
       

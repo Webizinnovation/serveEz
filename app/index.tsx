@@ -2,13 +2,16 @@ import { Redirect } from 'expo-router';
 import { useAuth } from '../hooks/useAuth';
 import { View, Animated, Easing } from 'react-native';
 import Logo from '../assets/images/Svg/logo1.svg';
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useUserStore } from '../store/useUserStore';
+import * as Sentry from '@sentry/react-native';
 
 export default function Index() {
   const { session, isLoading, isInitialized } = useAuth();
   const { profile } = useUserStore();
   const fadeAnim = useRef(new Animated.Value(0.3)).current;
+  const [redirectPath, setRedirectPath] = useState<string | null>(null);
+  const didRedirectRef = useRef(false);
 
   useEffect(() => {
     if (isLoading) {
@@ -34,6 +37,21 @@ export default function Index() {
     }
   }, [isLoading]);
 
+  useEffect(() => {
+    if (!isLoading && isInitialized && !didRedirectRef.current) {
+      didRedirectRef.current = true;
+      try {
+        if (session && profile) {
+          setRedirectPath('/(tabs)');
+        } else {
+          setRedirectPath('/onboarding/Welcome');
+        }
+      } catch (error) {
+        Sentry.captureException(error);
+      }
+    }
+  }, [isLoading, isInitialized, session, profile]);
+
   if (isLoading || !isInitialized) {
     return (
       <View style={{ 
@@ -57,12 +75,8 @@ export default function Index() {
     );
   }
 
-
-  if (!isLoading && isInitialized) {
-    if (session && profile) {
-      return <Redirect href="/(tabs)" />;
-    }
-    return <Redirect href="/onboarding/Welcome" />;
+  if (redirectPath) {
+    return <Redirect href={redirectPath as any} />;
   }
 
   return null;

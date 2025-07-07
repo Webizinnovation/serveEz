@@ -16,6 +16,10 @@ import { configurePushNotifications } from '../services/pushNotifications';
 // import NavigationLoader from '../components/common/NavigationLoader';
 import * as Sentry from '@sentry/react-native';
 
+// New imports from provided hooks
+import { useNavigationGuards } from '../hooks/useNavigationGuards';
+import { useSafeNavigate } from '../hooks/useSafeNavigate';
+
 Sentry.init({
   dsn: 'https://ef8b7d85db0a678da637dd0d3c6e87ec@o4509498758660096.ingest.de.sentry.io/4509498887372880',
 
@@ -41,8 +45,6 @@ export default Sentry.wrap(function RootLayout() {
   const authState = useAuth();
   const { isInitialized, user, session } = authState;
   const { profile } = useUserStore();
-  const isAuthenticated = !!session;
-  const isPhoneVerified = profile?.phone_verified || false;
   const fadeAnim = React.useRef(new Animated.Value(0.3)).current;
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -54,16 +56,14 @@ export default Sentry.wrap(function RootLayout() {
   
   const isMountedRef = useRef(true);
   const [forceSplashHide, setForceSplashHide] = useState(false);
-  const navigationInProgressRef = useRef(false);
-  const [isNavigating, setIsNavigating] = useState(false);
-  const currentPathRef = useRef<string | null>(null);
-  const previousPathRef = useRef<string | null>(null);
-  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const splashTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fadeAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
   const [fontLoadingComplete, setFontLoadingComplete] = useState(false);
   const [fontLoadingSuccess, setFontLoadingSuccess] = useState(false);
-  const lastNavigationRef = useRef<string | null>(null);
+
+  // Integrate new navigation hooks
+  const { safeNavigate, isNavigating } = useSafeNavigate();
+  useNavigationGuards(fontLoadingComplete, !authState.isLoading && authState.isInitialized); // Pass appReady status
 
   const { LightTheme, DarkTheme: PaperDarkTheme } = adaptNavigationTheme({
     reactNavigationLight: DefaultTheme,
@@ -148,11 +148,7 @@ export default Sentry.wrap(function RootLayout() {
     splashTimeoutRef.current = setTimeout(() => {
       if (!isMountedRef.current) return;
       setForceSplashHide(true);
-      SplashScreen.hideAsync().catch(() => {
-      });
-      requestAnimationFrame(() => {
-        isMountedRef.current = true;
-      });
+      SplashScreen.hideAsync().catch(() => {});
     }, 6000);
 
     const shouldHideSplash = (fontLoadingComplete) && (!authState.isLoading || forceSplashHide);
@@ -163,22 +159,20 @@ export default Sentry.wrap(function RootLayout() {
         splashTimeoutRef.current = null;
       }
       
-      requestAnimationFrame(() => {
-        SplashScreen.hideAsync()
-          .then(() => {
-            if (!isMountedRef.current) return;
+      SplashScreen.hideAsync()
+        .then(() => {
+          if (isMountedRef.current) {
             setTimeout(() => {
               if (isMountedRef.current) {
-                isMountedRef.current = true;
               }
             }, 100);
-          })
-          .catch(() => {
-            if (isMountedRef.current) {
-              isMountedRef.current = true;
-            }
-          });
-      });
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to hide splash screen:", error);
+          if (isMountedRef.current) {
+          }
+        });
     }
 
     return () => {
@@ -226,150 +220,9 @@ export default Sentry.wrap(function RootLayout() {
     };
   }, [authState.isLoading, fadeAnim]);
 
-  const safeNavigate = useCallback((path: string, params?: object) => {
-    if (!isMountedRef.current || navigationInProgressRef.current) {
-      return;
-    }
-    
-    const pathWithParams = params ? `${path}?${JSON.stringify(params)}` : path;
-    if (lastNavigationRef.current === pathWithParams) {
-      return;
-    }
-    
-    lastNavigationRef.current = pathWithParams;
-    navigationInProgressRef.current = true;
-    setIsNavigating(true); 
-    
-    requestAnimationFrame(() => {
-      try {
-        if (params) {
-          router.navigate({
-            pathname: path as never,
-            params: params as never
-          });
-        } else {
-          router.replace(path as never);
-        }
-        
-        if (navigationTimeoutRef.current) {
-          clearTimeout(navigationTimeoutRef.current);
-        }
-        
-        navigationTimeoutRef.current = setTimeout(() => {
-          if (isMountedRef.current) {
-            navigationInProgressRef.current = false;
-            setIsNavigating(false); 
-            navigationTimeoutRef.current = null;
-          }
-        }, 800); 
-      } catch (error) {
-        navigationInProgressRef.current = false;
-        setIsNavigating(false); 
-      }
-    });
-  }, [router]);
-
-  useEffect(() => {
-    if (currentPathRef.current === null) {
-      currentPathRef.current = pathname;
-      return;
-    }
-
-    previousPathRef.current = currentPathRef.current;
-    currentPathRef.current = pathname;
-
-    if (previousPathRef.current !== currentPathRef.current) {
-      setIsNavigating(true);
-
-      if (navigationTimeoutRef.current) {
-        clearTimeout(navigationTimeoutRef.current);
-      }
-      
-      navigationTimeoutRef.current = setTimeout(() => {
-        if (isMountedRef.current) {
-          setIsNavigating(false);
-          navigationTimeoutRef.current = null;
-        }
-      }, 800);
-    }
-  }, [pathname]);
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('state', () => {
-      setIsNavigating(true);
-      
-      if (navigationTimeoutRef.current) {
-        clearTimeout(navigationTimeoutRef.current);
-      }
-      
-      navigationTimeoutRef.current = setTimeout(() => {
-        if (isMountedRef.current) {
-          setIsNavigating(false);
-          navigationTimeoutRef.current = null;
-        }
-      }, 800);
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
-  useEffect(() => {
-    if (!isInitialized || !fontLoadingComplete || !isMountedRef.current) {
-      return;
-    }
-    
-    requestAnimationFrame(() => {
-      const inAuthGroup = segments[0] === '(auth)';
-      const inOnboardingGroup = segments[0] === 'onboarding';
-      const inTabsGroup = segments[0] === '(tabs)';
-      const currentlyVerifyingOTP = segments[1] === 'verify-otp';
-      
-      const currentPath = `/${segments.join('/')}`;
-      
-      try {
-        if (isAuthenticated) {
-          if (!isPhoneVerified && !currentlyVerifyingOTP) {
-            if (profile && profile.phone) {
-              const targetPath = '/(auth)/verify-otp';
-              const params = { phone: profile.phone, userId: user?.id };
-              
-              if (lastNavigationRef.current !== `${targetPath}?${JSON.stringify(params)}`) {
-                safeNavigate(targetPath, params);
-              }
-            }
-            return;
-          }
-
-          if (isPhoneVerified && (inAuthGroup || inOnboardingGroup)) {
-            safeNavigate('/(tabs)');
-            return;
-          }
-        } else {
-          if (!inOnboardingGroup && !inAuthGroup) {
-            safeNavigate('/(auth)/login');
-            return;
-          }
-        }
-      } catch (navError) {
-        console.error('Navigation error in _layout.tsx useEffect:', navError);
-        Sentry.captureException(navError); // Capture error with Sentry
-        // Optionally, show a user-friendly error message
-        // Toast.show({
-        //   type: 'error',
-        //   text1: 'Navigation Error',
-        //   text2: 'An unexpected navigation error occurred.',
-        // });
-      }
-    });
-  }, [isInitialized, isAuthenticated, isPhoneVerified, segments, safeNavigate, profile, user, fontLoadingComplete]);
-
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-      
-      if (navigationTimeoutRef.current) {
-        clearTimeout(navigationTimeoutRef.current);
-        navigationTimeoutRef.current = null;
-      }
       
       if (splashTimeoutRef.current) {
         clearTimeout(splashTimeoutRef.current);

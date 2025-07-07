@@ -5,10 +5,9 @@ const {
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getSentryExpoConfig(__dirname);
 
-// Temporary workaround for the "stream" / Node core-module error with ws
 config.resolver.unstable_enablePackageExports = false;
 
-// Modify the config for SVG support
+
 config.transformer = {
   ...config.transformer,
   babelTransformerPath: require.resolve('react-native-svg-transformer'),

@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Text, Linking, Platform, Image } from 'react-native';
-// Removing MapView import
-// import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../../services/supabase';
 import { ScaledSheet } from 'react-native-size-matters';
+
+const { width, height } = Dimensions.get('window');
 
 export default function MapViewScreen() {
   const { id } = useLocalSearchParams();
@@ -13,6 +14,7 @@ export default function MapViewScreen() {
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mapError, setMapError] = useState(false);
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     if (id) {
@@ -45,7 +47,6 @@ export default function MapViewScreen() {
       console.log('Fetched booking data:', data);
       console.log('Address to geocode:', data.address);
       
-      // Geocode the address using OpenStreetMap Nominatim API
       const encodedAddress = encodeURIComponent(data.address);
       const apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}`;
       console.log('Geocoding API URL:', apiUrl);
@@ -76,7 +77,7 @@ export default function MapViewScreen() {
     }
   };
 
-  const handleOpenDirections = () => {
+  const handleOpenGoogleMapsApp = () => {
     if (booking?.latitude && booking?.longitude) {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${booking.latitude},${booking.longitude}`;
       Linking.openURL(url);
@@ -85,8 +86,8 @@ export default function MapViewScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading location...</Text>
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.loadingText}>Loading map...</Text>
       </View>
     );
   }
@@ -103,34 +104,59 @@ export default function MapViewScreen() {
         <Text style={styles.headerTitle}>Location</Text>
       </View>
 
-      {/* Replace MapView with a static location view */}
-      <View style={styles.mapContainer}>
-        <View style={styles.staticMapContainer}>
-          <Ionicons name="location" size={60} color="#007BFF" />
-          <Text style={styles.locationText}>
-            {booking?.address || 'Address not available'}
+      {mapError || !booking?.latitude || !booking?.longitude ? (
+        <View style={[styles.mapContainer, styles.errorContainer]}>
+          <Ionicons name="warning-outline" size={50} color="#FF4B55" />
+          <Text style={styles.errorText}>
+            Could not load map. Please ensure a valid address is available.
           </Text>
-          <Text style={styles.coordinatesText}>
-            {booking?.latitude && booking?.longitude ? 
-              `${booking.latitude.toFixed(6)}, ${booking.longitude.toFixed(6)}` :
-              'Coordinates not available'
-            }
-          </Text>
+          <TouchableOpacity onPress={() => { setMapError(false); fetchBookingDetails(); }} style={styles.directionsButton}>
+            <Text style={styles.directionsButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      ) : (
+        <View style={styles.mapContainer}>
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            initialRegion={{
+              latitude: booking?.latitude || 0,
+              longitude: booking?.longitude || 0,
+              latitudeDelta: 0.05, 
+              longitudeDelta: 0.05, 
+            }}
+            showsUserLocation={true}
+            followsUserLocation={true}
+            zoomEnabled={true}
+            scrollEnabled={true}
+          >
+            {booking?.latitude && booking?.longitude && (
+              <Marker
+                coordinate={{
+                  latitude: booking.latitude,
+                  longitude: booking.longitude,
+                }}
+                title={booking.address || "Booking Location"}
+                description="This is the service location"
+                pinColor="#FF4B55" 
+              />
+            )}
+          </MapView>
+        </View>
+      )}
 
       <View style={styles.bottomContainer}>
         <View style={styles.addressContainer}>
-          <Ionicons name="location" size={20} color="#666" />
+          <Ionicons name="location-outline" size={20} color="#666" />
           <Text style={styles.addressText} numberOfLines={2}>{booking?.address || 'Address not available'}</Text>
         </View>
         <TouchableOpacity 
           style={styles.directionsButton}
-          onPress={handleOpenDirections}
+          onPress={handleOpenGoogleMapsApp}
           disabled={!booking?.latitude || !booking?.longitude}
         >
           <Ionicons name="navigate" size={20} color="#fff" />
-          <Text style={styles.directionsButtonText}>Get Directions</Text>
+          <Text style={styles.directionsButtonText}>Open in Google Maps</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -141,6 +167,10 @@ const styles = ScaledSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -171,26 +201,26 @@ const styles = ScaledSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
-  staticMapContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    padding: 20,
-  },
-  locationText: {
+  loadingText: {
     fontSize: '16@s',
-    fontFamily: 'Urbanist-Bold',
-    color: '#333',
-    textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  coordinatesText: {
-    fontSize: '14@s',
     fontFamily: 'Urbanist-Regular',
     color: '#666',
     textAlign: 'center',
+    marginTop: '20@s',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: '20@s',
+  },
+  errorText: {
+    fontSize: '18@s',
+    fontFamily: 'Urbanist-Bold',
+    color: '#FF4B55',
+    textAlign: 'center',
+    marginTop: '20@s',
+    marginBottom: '16@s',
   },
   bottomContainer: {
     padding: '16@s',
@@ -226,26 +256,5 @@ const styles = ScaledSheet.create({
     fontSize: '16@s',
     fontFamily: 'Urbanist-Bold',
     marginLeft: '8@s',
-  },
-  loadingText: {
-    fontSize: '16@s',
-    fontFamily: 'Urbanist-Regular',
-    color: '#666',
-    textAlign: 'center',
-    marginTop: '20@s',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: '20@s',
-  },
-  errorText: {
-    fontSize: '18@s',
-    fontFamily: 'Urbanist-Bold',
-    color: '#FF4B55',
-    textAlign: 'center',
-    marginTop: '20@s',
-    marginBottom: '16@s',
   },
 }); 

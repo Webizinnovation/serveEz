@@ -2,7 +2,8 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string;
-  phone: string;
+  phone?: string;
+  phone_verified?: boolean;
   role: 'user' | 'provider';
   profile_pic?: string;
   created_at?: string;

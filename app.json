@@ -20,7 +20,8 @@
         "tinted": "./assets/images/icons/Tinted.png"
       },
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "googleMapsApiKey": "AIzaSyAlmHKvAqkFuPSXX2RU0VZ3zXgHajZoyXU"
       }
     },
     "android": {
@@ -52,7 +53,10 @@
             "DEFAULT"
           ]
         }
-      ]
+      ],
+      "googleMaps": {
+        "apiKey": "AIzaSyAlmHKvAqkFuPSXX2RU0VZ3zXgHajZoyXU"
+      }
     },
     "web": {
       "bundler": "metro",

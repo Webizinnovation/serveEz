@@ -33,7 +33,6 @@ const isSmallDevice = width < 375;
 
 
 const ITEMS_PER_PAGE = 20;
-const LOCATION_TIMEOUT = 7000;
 const NEARBY_DISTANCE_THRESHOLD = 15; 
 const MAX_PROVIDERS_DISPLAY = 10; 
 const PREFETCH_TIMEOUT = 5000; 
@@ -74,25 +73,30 @@ export default function HomeScreen() {
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
+    console.log('HomeScreen mounted. Profile ID:', profile?.id);
     if (!profile?.id) {
       router.replace('/(auth)/login');
     }
     return () => {
       isMounted.current = false;
+      console.log('HomeScreen unmounted. isMounted set to false.');
     };
   }, [profile, router]);
 
   useEffect(() => {
+    console.log('Clearing old provider cache...');
     const now = Date.now();
     Object.keys(providerCache).forEach(key => {
       if (now - providerCache[key].timestamp > CACHE_EXPIRATION) {
         delete providerCache[key];
+        console.log('Deleted expired cache for:', key);
       }
     });
   }, []);
 
   
   const filteredProviders = useMemo(() => {
+    console.log('Recalculating filteredProviders. Query:', searchQuery, 'Providers count:', providers.length);
     if (!searchQuery.trim()) return providers;
     
     const query = searchQuery.toLowerCase().trim();
@@ -116,6 +120,7 @@ export default function HomeScreen() {
   }, [providers, searchQuery, location]);
 
   const nearbyProviders = useMemo(() => {
+    console.log('Recalculating nearbyProviders. Location:', location ? 'available' : 'unavailable', 'Providers count:', providers.length);
     if (!location?.coords) return [];
     
     const nearby = providers.filter(provider => {
@@ -133,6 +138,7 @@ export default function HomeScreen() {
 
  
   const randomProviders = useMemo(() => {
+    console.log('Recalculating randomProviders. Nearby count:', nearbyProviders.length, 'Providers count:', providers.length);
     if (nearbyProviders.length > 0) return [];  
     
    
@@ -143,10 +149,12 @@ export default function HomeScreen() {
   }, [providers, nearbyProviders]);
 
   const displayProviders = useMemo(() => {
+    console.log('Determining displayProviders. Nearby count:', nearbyProviders.length, 'Random count:', randomProviders.length);
     return nearbyProviders.length > 0 ? nearbyProviders : randomProviders;
   }, [nearbyProviders, randomProviders]);
 
   const getLocation = useCallback(async () => {
+    console.log('getLocation called. isRetrying:', isRetrying);
     if (isRetrying) return;
     try {
       setIsRetrying(true);
@@ -171,11 +179,13 @@ export default function HomeScreen() {
               timestamp: Date.now()
             });
             setLocationText('Unknown location');
+            console.log('Location set to Unknown due to timeout.');
           }
         }
       }, 20000); 
         
       const { status } = await Location.requestForegroundPermissionsAsync();
+      console.log('Location permission status:', status);
       if (status !== 'granted') {
         clearTimeout(locationMainTimeout);
         if (isMounted.current) {
@@ -196,6 +206,7 @@ export default function HomeScreen() {
               timestamp: Date.now()
             });
             setLocationText('Location access denied');
+            console.log('Location set to Access Denied.');
           }
         }
         return;
@@ -204,6 +215,7 @@ export default function HomeScreen() {
       let position: Location.LocationObject | null = null;
       
       try {
+        console.log('Attempting high accuracy location...');
         position = await Promise.race([
           Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
@@ -212,12 +224,16 @@ export default function HomeScreen() {
             setTimeout(() => reject(new Error('High accuracy position timeout')), 8000)
           )
         ]) as Location.LocationObject;
+        if (position) {
+          console.log('High accuracy location obtained:', position.coords);
+        }
       } catch (highAccuracyError) {
         console.warn('High accuracy position failed, trying low accuracy:', highAccuracyError);
       }
       
       if (!position) {
         try {
+          console.log('Attempting low accuracy location...');
           position = await Promise.race([
             Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.Low,
@@ -226,6 +242,9 @@ export default function HomeScreen() {
               setTimeout(() => reject(new Error('Low accuracy position timeout')), 8000)
             )
           ]) as Location.LocationObject;
+          if (position) {
+            console.log('Low accuracy location obtained:', position.coords);
+          }
         } catch (lowAccuracyError) {
           console.error('Low accuracy position also failed:', lowAccuracyError);
           throw new Error('Could not get location after multiple attempts');
@@ -241,11 +260,12 @@ export default function HomeScreen() {
       if (isMounted.current) {
         setLocation(position);
         setLocationError(false);
+        console.log('Location successfully set:', position.coords);
       }
 
       try {
         const { latitude, longitude } = position.coords;
-        
+        console.log('Attempting reverse geocoding for:', latitude, longitude);
         try {
           const addressResult = await Promise.race([
             Location.reverseGeocodeAsync({ latitude, longitude }),
@@ -256,6 +276,7 @@ export default function HomeScreen() {
           
           if (addressResult && addressResult.length > 0) {
             const address = addressResult[0];
+            console.log('Geocoding successful. Address:', address);
             
             const region = address.region || address.country || 'Unknown';
             const subregion = address.city || address.subregion || '';
@@ -265,9 +286,11 @@ export default function HomeScreen() {
               setState(region);
               setLga(subregion);
               setLocationText(locationString || 'Location found');
+              console.log('Location text set to:', locationString);
             }
 
             if (profile?.id) {
+              console.log('Updating location in profile...');
               updateLocationInProfile(profile.id, {
                 region,
                 subregion,
@@ -276,6 +299,7 @@ export default function HomeScreen() {
               });
             }
           } else {
+            console.warn('No address found from geocoding.');
             handleNoAddressFound(position, profile?.id);
           }
         } catch (geocodeError) {
@@ -289,7 +313,7 @@ export default function HomeScreen() {
         }
       }
     } catch (error) {
-      console.error('Error getting location:', error);
+      console.error('Error getting location (outer catch):', error);
       if (isMounted.current) {
         setLocationError(true);
         
@@ -307,17 +331,20 @@ export default function HomeScreen() {
             timestamp: Date.now()
           });
           setLocationText('Location unavailable');
+          console.log('Location set to Unavailable due to error.');
         }
       }
     } finally {
       if (isMounted.current) {
         setIsRetrying(false);
         locationInitialized.current = true;
+        console.log('getLocation finished. isRetrying:', false, 'locationInitialized:', true);
       }
     }
   }, [profile, updateProfile, isRetrying, location]);
 
   const updateLocationInProfile = useCallback(async (userId: string, locationData: any) => {
+    console.log('updateLocationInProfile called for userId:', userId, 'with data:', locationData);
     try {
       const { error: updateError } = await supabase
         .from('users')
@@ -327,6 +354,7 @@ export default function HomeScreen() {
       if (updateError) {
         console.error('Failed to update location in profile:', updateError);
       } else if (isMounted.current && profile) {
+        console.log('Profile location updated successfully in store.');
         updateProfile({
           ...profile,
           // @ts-ignore - ignoring TypeScript
@@ -339,6 +367,7 @@ export default function HomeScreen() {
   }, [profile, updateProfile]);
 
   const handleNoAddressFound = useCallback((position: Location.LocationObject, userId?: string) => {
+    console.log('handleNoAddressFound called. Position:', position.coords);
     const { latitude, longitude } = position.coords;
     const locationString = 'Location found';
     
@@ -346,6 +375,7 @@ export default function HomeScreen() {
       setState('Unknown region');
       setLga('');
       setLocationText(locationString);
+      console.log('No address found, location text set to:', locationString);
     }
     
     if (userId) {
@@ -378,18 +408,26 @@ export default function HomeScreen() {
   }, []);
 
   const fetchProviders = useCallback(async () => {
-    if (!profile?.id) return;
+    console.log('fetchProviders called. Profile ID:', profile?.id);
+    if (!profile?.id) {
+      console.log('No profile ID, aborting fetchProviders.');
+      return;
+    }
     
     try {
       if (isMounted.current) {
         setLoading(true);
+        console.log('setLoading(true) in fetchProviders.');
       }
       
       const fetchTimeoutId = setTimeout(() => {
         if (isMounted.current) {
           console.log('Provider fetch operation timed out completely');
           setLoading(false);
-          setProviders(prev => prev.length > 0 ? prev : []); 
+          setProviders(prev => {
+            console.log('Setting providers on timeout. Previous count:', prev.length);
+            return prev.length > 0 ? prev : []; 
+          }); 
           
           
           const message = 'Loading timed out. Pull down to retry.';
@@ -404,6 +442,7 @@ export default function HomeScreen() {
       
       let data;
       try {
+        console.log('Fetching providers from Supabase...');
         const { data: providerData, error: fetchError } = await supabase
           .from('providers')
           .select(`
@@ -415,11 +454,12 @@ export default function HomeScreen() {
           .order('created_at', { ascending: false });
         
         if (fetchError) {
-          console.error('Error fetching providers data:', fetchError);
+          console.error('Error fetching providers data from Supabase:', fetchError);
           throw fetchError;
         }
         
         data = providerData;
+        console.log('Raw providers data received (count):', data ? data.length : 0, 'Data:', data);
         
         if (!data || data.length === 0) {
           clearTimeout(fetchTimeoutId);
@@ -427,36 +467,42 @@ export default function HomeScreen() {
             setProviders([]);
             setPage(0);
             setLoading(false);
+            console.log('No providers found, setting empty array and setLoading(false).');
           }
           return;
         }
       } catch (fetchError) {
-        console.error('Error fetching providers data:', fetchError);
+        console.error('Error fetching providers data (Supabase catch):', fetchError);
         clearTimeout(fetchTimeoutId);
         
         if (isMounted.current) {
           setLoading(false);
-          setProviders(prev => prev.length > 0 ? prev : []);
+          setProviders(prev => {
+            console.log('Setting providers on fetch error. Previous count:', prev.length);
+            return prev.length > 0 ? prev : [];
+          });
         }
         return;
       }
 
       try {
+        console.log('Enhancing providers with calculated distance...');
         const enhancedProviders = data.map(provider => {
           return {
             ...provider,
             calculatedRating: provider.rating,
             reviews: [],
-            distance: location?.coords 
+            distance: (location?.coords && provider.location?.latitude && provider.location?.longitude)
               ? calculateDistance(
                   location.coords.latitude,
                   location.coords.longitude,
-                  provider.location?.latitude || 0,
-                  provider.location?.longitude || 0
+                  provider.location.latitude,
+                  provider.location.longitude
                 )
               : null
           };
         });
+        console.log('Providers enhanced with distance. First item distance:', enhancedProviders[0]?.distance);
 
         const providersWithDistance = location?.coords 
           ? enhancedProviders.sort((a, b) => {
@@ -470,15 +516,20 @@ export default function HomeScreen() {
         if (isMounted.current) {
           setProviders(providersWithDistance);
           setPage(0);
+          console.log('setProviders called with distance-sorted data. Count:', providersWithDistance.length);
         }
 
         const enhanceWithReviews = async () => {
+          console.log('Starting review enhancement...');
           try {
             const enhancedWithReviews = await Promise.all(
               enhancedProviders.map(async (provider) => {
                 const userId = provider.users?.id;
                 
-                if (!userId) return provider;
+                if (!userId) {
+                  console.log('Skipping review fetch for provider without userId:', provider.id);
+                  return provider;
+                }
                 
                 try {
                   const { data: reviewsData, error: reviewsError } = await supabase
@@ -486,13 +537,17 @@ export default function HomeScreen() {
                     .select('rating')
                     .eq('provider_id', userId);
                     
-                  if (reviewsError) return provider;
+                  if (reviewsError) {
+                    console.warn(`Error fetching reviews for provider ${userId}:`, reviewsError);
+                    return provider;
+                  }
                   
                   let averageRating = 0;
                   if (reviewsData && reviewsData.length > 0) {
                     const sum = reviewsData.reduce((acc, review) => acc + review.rating, 0);
                     averageRating = Number((sum / reviewsData.length).toFixed(1));
                   }
+                  // console.log(`Reviews for ${userId}:`, reviewsData, `Avg Rating: ${averageRating}`);
                     
                   return {
                     ...provider,
@@ -505,7 +560,7 @@ export default function HomeScreen() {
                 }
               })
             );
-            
+            console.log('Reviews enhancement completed. Re-sorting providers...');
             const sortedWithReviews = location?.coords 
               ? enhancedWithReviews.sort((a, b) => {
                   if (a.distance === null && b.distance === null) return 0;
@@ -517,9 +572,10 @@ export default function HomeScreen() {
 
             if (isMounted.current) {
               setProviders(sortedWithReviews);
+              console.log('setProviders called with review-enhanced and sorted data. Count:', sortedWithReviews.length);
             }
           } catch (reviewsError) {
-            console.warn('Error enhancing providers with reviews:', reviewsError);
+            console.warn('Error enhancing providers with reviews (outer catch):', reviewsError);
           }
         };
         
@@ -534,26 +590,33 @@ export default function HomeScreen() {
             reviews: []
           }));
           setProviders(basicProviders);
+          console.log('Processing error, falling back to basic providers. Count:', basicProviders.length);
         }
       } finally {
         clearTimeout(fetchTimeoutId);
         if (isMounted.current) {
           setLoading(false);
+          console.log('setLoading(false) in fetchProviders finally block.');
         }
       }
     } catch (error) {
-      console.error('Unexpected error fetching providers:', error);
+      console.error('Unexpected error fetching providers (main catch):', error);
       if (isMounted.current) {
         setLoading(false);
-        setProviders(prev => prev.length > 0 ? prev : []);
+        setProviders(prev => {
+          console.log('Setting providers on unexpected error. Previous count:', prev.length);
+          return prev.length > 0 ? prev : [];
+        });
       }
     }
   }, [profile?.id, location, calculateDistance]);
 
   const loadMoreProviders = useCallback(async () => {
+    console.log('loadMoreProviders called. Loading:', loading, 'Refreshing:', refreshing, 'SearchQuery:', searchQuery, 'Nearby count:', nearbyProviders.length);
     if (loading || refreshing) return;
     
     if (searchQuery || (!searchQuery && nearbyProviders.length > 0)) {
+      console.log('Skipping loadMoreProviders due to search query or existing nearby providers.');
       return;
     }
     
@@ -683,10 +746,13 @@ export default function HomeScreen() {
 
   // Initialize data
   useEffect(() => {
+    console.log('Main useEffect for data initialization. Profile ID:', profile?.id);
     if (profile?.id) {
+      console.log('Calling fetchProviders from main useEffect.');
       fetchProviders();
       
       if (!locationInitialized.current) {
+        console.log('Location not initialized, checking saved location in profile...');
         try {
           const userLocation = (profile as any).location;
           
@@ -710,27 +776,28 @@ export default function HomeScreen() {
             setLocationText(userLocation.current_address || '');
             setLocationError(false);
             locationInitialized.current = true;
+            console.log('Location loaded from profile:', savedLocation.coords);
           } else {
-            // If no location in profile, get it fresh
+            console.log('No saved location in profile, calling getLocation().');
             getLocation();
           }
         } catch (error) {
           console.error('Error loading location from profile:', error);
+          console.log('Calling getLocation() after profile location error.');
           getLocation();
         }
       }
     }
   }, [profile?.id, fetchProviders, getLocation]);
 
-  // Monitor app state changes - no longer update location on app resume
   useEffect(() => {
+    console.log('AppState change listener setup.');
     const subscription = AppState.addEventListener('change', nextAppState => {
-      // When app comes to the foreground from background or inactive state
+      console.log('AppState changed from', appState.current, 'to', nextAppState);
       if (
         (appState.current === 'background' || appState.current === 'inactive') &&
         nextAppState === 'active'
       ) {
-        // Check if the app was in background for more than 5 minutes
         const now = Date.now();
         const timeInBackground = now - lastActiveTime.current;
         const fiveMinutesInMs = 5 * 60 * 1000;
@@ -738,19 +805,16 @@ export default function HomeScreen() {
         if (timeInBackground > fiveMinutesInMs) {
           console.log('App was inactive for more than 5 minutes, refreshing provider data only...');
           
-          // Reset provider data state only
           if (isMounted.current) {
             setLoading(true);
           }
-          
-          // Only refresh providers, not location
+
           InteractionManager.runAfterInteractions(() => {
             fetchProviders();
           });
         }
       }
       
-      // Update the lastActiveTime when going to background
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         lastActiveTime.current = Date.now();
       }
@@ -763,19 +827,17 @@ export default function HomeScreen() {
     };
   }, [fetchProviders]);
 
-  // Back button handler for Android
   useFocusEffect(
     useCallback(() => {
+      console.log('useFocusEffect for BackHandler added.');
       let backPressCount = 0;
       let backPressTimer: NodeJS.Timeout | null = null;
 
       const handleBackPress = () => {
         if (backPressCount === 1) {
-          // Exit the app on second press
           BackHandler.exitApp();
           return true;
         } else {
-          // First press - show platform-specific notification and reset after timeout
           backPressCount += 1;
           
           const message = 'Press back again to exit';
@@ -787,7 +849,6 @@ export default function HomeScreen() {
             setSnackbarVisible(true);
           }
           
-          // Reset counter after 2 seconds
           if (backPressTimer) clearTimeout(backPressTimer);
           backPressTimer = setTimeout(() => {
             backPressCount = 0;
@@ -807,32 +868,28 @@ export default function HomeScreen() {
     }, [])
   );
 
-  // Clear any pending tasks when navigating away
   useFocusEffect(
     useCallback(() => {
-      // When screen comes into focus, ensure navigation flag is reset
+      console.log('useFocusEffect for navigation cleanup.');
       isNavigating.current = false;
       
       return () => {
-        // When screen loses focus, cancel any pending operations
-        isNavigating.current = false; // Also reset navigation flag when leaving screen
+        isNavigating.current = false;
         if (isMounted.current) {
-          // Clear loading states
           setLoading(false);
           setRefreshing(false);
           setIsRetrying(false);
+          console.log('useFocusEffect cleanup: Loading, Refreshing, Retrying set to false.');
         }
       };
     }, [])
   );
 
-  // Pre-fetch provider details for faster navigation
   const prefetchProviderDetails = useCallback(async (providerId: string) => {
-    // Check cache first
+    console.log('prefetchProviderDetails called for:', providerId);
     const now = Date.now();
     if (providerCache[providerId] && (now - providerCache[providerId].timestamp < CACHE_EXPIRATION)) {
       console.log('Using cached provider data for:', providerId);
-      // Update prefetched state with cached data
       setPrefetchedProviders(prev => ({
         ...prev,
         [providerId]: providerCache[providerId].data
@@ -840,15 +897,12 @@ export default function HomeScreen() {
       return;
     }
     
-    // Skip if already prefetched
     if (prefetchedProviders[providerId]) return;
     
-    try {
-      // Create a timeout controller to abort the fetch if it takes too long
+    try { 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), PREFETCH_TIMEOUT);
       
-      // Fetch provider details in the background
       const { data, error } = await supabase
         .from('providers')
         .select(`
@@ -863,44 +917,39 @@ export default function HomeScreen() {
       if (error) throw error;
       
       if (data && isMounted.current) {
-        // Store in prefetched state
         setPrefetchedProviders(prev => ({
           ...prev,
           [providerId]: data
         }));
         
-        // Store in cache
         providerCache[providerId] = {
           data,
           timestamp: Date.now()
         };
       }
     } catch (error) {
-      // Silently fail for prefetching - we'll fetch again when needed
       console.log('Prefetch failed for provider:', providerId);
     }
   }, [prefetchedProviders]);
   
-  // Handle touch start on provider item - begin prefetching
   const handleProviderItemPress = useCallback((id: string) => {
-    // Pre-fetch in the background
+    console.log('handleProviderItemPress called for:', id);
     InteractionManager.runAfterInteractions(() => {
       prefetchProviderDetails(id);
     });
   }, [prefetchProviderDetails]);
 
-  // Add onRefresh function here, after all other functions it depends on are defined
   const onRefresh = useCallback(async () => {
+    console.log('onRefresh called. Refreshing state:', refreshing);
     if (refreshing) return;
     setRefreshing(true);
+    console.log('setRefreshing(true) in onRefresh.');
     
-    // Set a timeout to force end refreshing after 15 seconds
     const refreshTimeoutId = setTimeout(() => {
       if (isMounted.current) {
         setRefreshing(false);
-        console.log('Refresh operation timed out');
+        console.log('Refresh operation timed out.');
         
-        // Notify user
         const message = 'Refresh timed out. Try again later.';
         if (Platform.OS === 'android') {
           ToastAndroid.show(message, ToastAndroid.SHORT);
@@ -912,20 +961,19 @@ export default function HomeScreen() {
     }, 15000);
     
     try {
-      // Run operations in sequence rather than parallel to avoid race conditions
+      console.log('Calling fetchProviders from onRefresh.');
       await fetchProviders();
       
-      // Only get location if it's not already available or if there was an error
       if (!location?.coords || locationError) {
+        console.log('Location not available or error, calling getLocation() from onRefresh.');
         await getLocation();
       }
       
-      // Clean up timeout as operations completed successfully
       clearTimeout(refreshTimeoutId);
+      console.log('Refresh successful.');
     } catch (error) {
       console.error('Error during refresh:', error);
-      
-      // Show error message to user
+
       const message = 'Something went wrong. Please try again.';
       if (Platform.OS === 'android') {
         ToastAndroid.show(message, ToastAndroid.SHORT);
@@ -934,21 +982,19 @@ export default function HomeScreen() {
         setSnackbarVisible(true);
       }
       
-      // Clean up timeout as we're handling the error
       clearTimeout(refreshTimeoutId);
     } finally {
-      // Always reset refreshing state
       if (isMounted.current) {
         setRefreshing(false);
+        console.log('setRefreshing(false) in onRefresh finally block.');
       }
     }
   }, [refreshing, fetchProviders, getLocation, location, locationError]);
 
-  // Set up a variable to determine which view to render instead of using early returns
   const shouldRenderProviderView = profile?.role === 'provider';
 
-  // Provider view (now rendered in the final return)
   const providerView = useMemo(() => (
+    console.log('Rendering ProviderHomeScreen for role: provider'),
     <ProviderHomeScreen 
       profile={profile}
       onRefresh={onRefresh}
@@ -956,87 +1002,84 @@ export default function HomeScreen() {
     />
   ), [profile, onRefresh, refreshing]);
 
-  // Retry location handler - only used for manual refresh
   const retryLocation = useCallback(async () => {
+    console.log('retryLocation called. isRetrying:', isRetrying);
     if (isRetrying) return;
     
     setIsRetrying(true);
     try {
       await getLocation();
+      console.log('getLocation called from retryLocation.');
     } finally {
       if (isMounted.current) {
         setIsRetrying(false);
+        console.log('setIsRetrying(false) in retryLocation finally block.');
       }
     }
   }, [getLocation, isRetrying]);
 
-  // Service navigation handlers
   const handleServicePress = useCallback((serviceName: string) => {
+    console.log('handleServicePress called for:', serviceName);
     router.push(`/services/${serviceName}`);
   }, [router]);
 
   const handleSeeAllPress = useCallback(() => {
+    console.log('handleSeeAllPress called.');
     navigation.navigate('services' as never);
     setTimeout(() => {
       useUserStore.setState(state => ({
         ...state,
         selectedOrderTab: 'ALL'
       }));
+      console.log('Selected order tab set to ALL.');
     }, 100);
   }, [navigation]);
 
-  // Safe navigation handler to prevent double clicks
   const handleProviderPress = useCallback((id: string) => {
-    // Use local variable for immediate tap detection
-    // This provides protection even before the React event cycle completes
+    console.log('handleProviderPress called for:', id, 'isNavigating:', isNavigating.current);
     if (isNavigating.current) {
       console.log('Navigation already in progress, ignoring tap');
       return;
     }
     
-    // Set navigation flag immediately
     isNavigating.current = true;
     
-    // Set loading state for visual feedback
     setLoadingProviderId(id);
+    console.log('setLoadingProviderId to:', id);
     
-    // Add a small delay before navigation to ensure any potential second tap
-    // will definitely encounter the isNavigating flag
     setTimeout(() => {
       try {
-        // Store prefetched data for faster access on the detail screen
         const providerData = prefetchedProviders[id] || providerCache[id]?.data;
+        console.log('Navigating to provider details for:', id, 'Prefetched data available:', !!providerData);
         
-        // Navigate to provider details
         router.push({
           pathname: `./(provider)/${id}`,
           params: { prefetchedData: providerData ? JSON.stringify(providerData) : undefined }
         });
       } catch (error) {
         console.error('Navigation error:', error);
-        // Reset flag in case of error
         isNavigating.current = false;
         setLoadingProviderId(null);
       }
-    }, 10); // Very small delay that's imperceptible to user but helps catch rapid taps
+    }, 10);
     
-    // Reset navigation flag after a longer delay to prevent any subsequent taps
-    // This ensures the flag is eventually reset even if there's an error during navigation
     setTimeout(() => {
       isNavigating.current = false;
       setLoadingProviderId(null);
-    }, 1000); // Extended to 1 second for maximum protection against rapid clicks
+      console.log('Navigation debounce ended. isNavigating:', false, 'loadingProviderId:', null);
+    }, 1000);
     
   }, [router, prefetchedProviders]);
-
-  // Profile update handler
+  
   const handleProfileUpdate = useCallback((url: string) => {
+    console.log('handleProfileUpdate called with URL:', url);
     useUserStore.setState(state => ({
       profile: { ...state.profile!, profile_pic: url }
     }));
   }, []);
 
   const ListHeaderComponent = useMemo(() => (
+    console.log('Re-rendering ListHeaderComponent. LocationText:', locationText, 'Nearby Providers Count:', nearbyProviders.length),
     <>
       <HeaderSection
         location={location}
@@ -1070,10 +1113,9 @@ export default function HomeScreen() {
     nearbyProviders.length
   ]);
 
-  // Reset app state function - explicit user action
   const resetAppState = useCallback(async () => {
+    console.log('resetAppState called.');
     if (isMounted.current) {
-      // Clear app state
       setLoading(true);
       setLocationError(false);
       setProviders([]);
@@ -1084,6 +1126,7 @@ export default function HomeScreen() {
       Object.keys(providerCache).forEach(key => {
         delete providerCache[key];
       });
+      console.log('App state variables reset. Cache cleared.');
       
       setTimeout(() => {
         if (isMounted.current) {
@@ -1096,12 +1139,15 @@ export default function HomeScreen() {
             setSnackbarVisible(true);
           }
           
+          console.log('Calling getLocation and fetchProviders after app state reset.');
           getLocation();
           fetchProviders();
         }
       }, 300);
     }
   }, [getLocation, fetchProviders]);
+
+  console.log('HomeScreen render. Loading:', loading, 'Refreshing:', refreshing, 'Providers count:', providers.length, 'Display Providers count:', displayProviders.length);
 
   return (
     <SafeAreaView style={[
@@ -1110,7 +1156,8 @@ export default function HomeScreen() {
     ]}>
       {!profile ? (
         <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-          {/* Don't show any content - this is just a transient state during navigation */}
+          {/* transient state during navigation */}
+          <Text style={{color: isDark ? '#fff' : '#000'}}>Loading profile...</Text>
         </View>
       ) : shouldRenderProviderView ? (
         providerView

@@ -102,7 +102,6 @@ export default function Login() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
-  // Define theme colors based on system preference
   const colors = {
     background: isDark ? '#121212' : Colors.primary,
     cardBackground: isDark ? '#1E1E1E' : 'white',
@@ -154,7 +153,13 @@ export default function Login() {
   const handleLogin = async () => {
     try {
       if (!email || !password) {
-        setError('Please fill in all fields');
+        Toast.show({
+          type: 'error',
+          text1: 'Login Error',
+          text2: 'Please fill in all fields',
+          position: 'top',
+          visibilityTime: 3000,
+        });
         return;
       }
 
@@ -170,16 +175,34 @@ export default function Login() {
 
       if (signInError) {
         if (signInError.message.includes('Email not confirmed')) {
-          setError('Please check your email and confirm your account before signing in');
+          Toast.show({
+            type: 'error',
+            text1: 'Login Error',
+            text2: 'Please check your email and confirm your account before signing in',
+            position: 'top',
+            visibilityTime: 4000,
+          });
         } else {
-          setError(signInError.message || 'An error occurred during sign-in');
+          Toast.show({
+            type: 'error',
+            text1: 'Login Error',
+            text2: signInError.message || 'An error occurred during sign-in',
+            position: 'top',
+            visibilityTime: 4000,
+          });
         }
         setShowLoadingOverlay(false);
         return;
       }
 
       if (!signInData.user) {
-        setError('No user returned from sign-in');
+        Toast.show({
+          type: 'error',
+          text1: 'Login Error',
+          text2: 'No user returned from sign-in',
+          position: 'top',
+          visibilityTime: 4000,
+        });
         setShowLoadingOverlay(false);
         return;
       }
@@ -204,7 +227,6 @@ export default function Login() {
         first_login_at: userProfile?.first_login_at
       });
 
-      // Store the user in the UserStore
       try {
         await useUserStore.getState().fetchProfile();
       } catch (refreshError) {
@@ -217,11 +239,9 @@ export default function Login() {
         if (success) {
           console.log('Successfully registered for push notifications with token:', token);
           
-          // Check if this is the first login
           const isFirstLogin = !userProfile?.first_login_at;
           
           if (isFirstLogin) {
-            // Update the first_login_at timestamp
             const { error: updateError } = await supabase
               .from('users')
               .update({ first_login_at: new Date().toISOString() })
@@ -231,20 +251,16 @@ export default function Login() {
               console.error('Error updating first login timestamp:', updateError);
             }
             
-            // Send first-time login notification
             await sendFirstLoginNotification(email);
             console.log('Sent first-time login notification');
           } else {
-            // Display regular login notification
             await sendLoginNotification(email);
           }
         } else {
           console.warn('Push notification registration failed:', pushError);
-          // Continue with login even if push registration fails
         }
       } catch (pushError) {
         console.error('Error registering for push notifications:', pushError);
-        // Continue with login even if push registration fails
       }
 
       // Check if phone verification is needed
@@ -272,10 +288,15 @@ export default function Login() {
       router.replace('/');
     } catch (error: any) {
       console.error('Login error:', error);
-      setError(error.message || 'An unexpected error occurred');
+      Toast.show({
+        type: 'error',
+        text1: 'Login Error',
+        text2: error.message || 'An unexpected error occurred',
+        position: 'top',
+        visibilityTime: 4000,
+      });
     } finally {
       setLoading(false);
-      // Keep the loading overlay a bit longer until navigation completes
       setTimeout(() => {
         setShowLoadingOverlay(false);
       }, 1000);

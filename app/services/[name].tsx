@@ -54,15 +54,15 @@ export default function ServiceProvidersScreen() {
   const [filteredProviders, setFilteredProviders] = useState<Provider[]>([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState({
-    sortBy: 'distance', // 'distance', 'price_low', 'price_high'
-    priceRange: { min: 0, max: 100000 },
-    maxDistance: 50 // in KM
+    sortBy: 'distance',
+    priceRange: { min: 0, max: 1000000 },
+    maxDistance: 50 
   });
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const { isDark, colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0.4)).current;
   
-  // Add animation effect for the logo
+  
   useEffect(() => {
     if (loading) {
       Animated.loop(
@@ -83,7 +83,6 @@ export default function ServiceProvidersScreen() {
       ).start();
     } else {
       fadeAnim.setValue(1);
-      // Ensure animation stops when not loading
       fadeAnim.stopAnimation();
     }
   }, [loading]);
@@ -95,30 +94,25 @@ export default function ServiceProvidersScreen() {
   useEffect(() => {
     let filtered = [...providers];
     
-    // Apply search query filter
     if (searchQuery.trim() !== '') {
       filtered = filtered.filter(provider => 
         provider.users?.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    // Helper function to get price (same logic as in renderProvider)
     const getProviderPrice = (provider: Provider) => {
       if (!provider.pricing || !name) return 0;
       
       const searchName = name.toString().trim();
       
-      // Try exact match first
       if (provider.pricing[searchName] !== undefined) {
         return provider.pricing[searchName];
       }
       
-      // Try with a space at the end
       if (provider.pricing[searchName + ' '] !== undefined) {
         return provider.pricing[searchName + ' '];
       }
       
-      // Look for keys that contain this service name
       const pricingKeys = Object.keys(provider.pricing);
       for (const key of pricingKeys) {
         const lowerKey = key.toLowerCase();
@@ -128,10 +122,8 @@ export default function ServiceProvidersScreen() {
         }
       }
       
-      // Check for subcategory pricing
       if (searchName.includes(' - ')) {
         const [mainCategory, subCategory] = searchName.split(' - ');
-        // Try to find main category + subcategory match
         for (const key of pricingKeys) {
           if (key.toLowerCase().includes(mainCategory.toLowerCase()) && 
               key.toLowerCase().includes(subCategory.toLowerCase())) {
@@ -143,18 +135,15 @@ export default function ServiceProvidersScreen() {
       return 0;
     };
 
-    // Apply price range filter with the new function
     filtered = filtered.filter(provider => {
       const price = getProviderPrice(provider);
       return price >= filters.priceRange.min && price <= filters.priceRange.max;
     });
 
-    // Apply distance filter
     filtered = filtered.filter(provider => 
       provider.distance <= filters.maxDistance
     );
 
-    // Apply sorting with the new function
     filtered.sort((a, b) => {
       const priceA = getProviderPrice(a);
       const priceB = getProviderPrice(b);
@@ -176,7 +165,6 @@ export default function ServiceProvidersScreen() {
   const fetchProviders = async () => {
     try {
       setLoading(true);
-      console.log('Service name type:', typeof name, 'value:', name);
 
       const { data, error } = await supabase
         .from('providers')
@@ -216,24 +204,17 @@ export default function ServiceProvidersScreen() {
         if (!provider.services || !Array.isArray(provider.services)) {
           return false;
         }
-        
-        // Normalize services
+       
         const normalizedServices = provider.services.map(service => 
           service.toLowerCase().trim()
         );
-        
-        // Check if any service includes the search term as a substring
-        // This will match both exact matches and partial matches
+    
         const hasService = normalizedServices.some(service => 
           service.includes(searchService) || 
-          // Also check if service starts with "service name -" for subcategories
           service.startsWith(`${searchService} -`) ||
-          // Check if the service is a subcategory that matches the search term
           (service.includes(' - ') && service.split(' - ')[1].trim().toLowerCase() === searchService)
         );
         
-        console.log('Provider services:', normalizedServices);
-        console.log('Provider matches service:', hasService);
         
         const hasUser = provider.users && 
           typeof provider.users === 'object' &&
@@ -243,7 +224,6 @@ export default function ServiceProvidersScreen() {
         return hasService && hasUser;
       });
 
-      console.log('Filtered providers:', filteredData);
 
       if (error) throw error;
 
@@ -296,10 +276,8 @@ export default function ServiceProvidersScreen() {
       return null;
     }
 
-    // Determine if screen is extra small
     const isSmallScreen = width < 360;
 
-    // Helper function to find the price for the service
     const getServicePrice = () => {
       if (!item.pricing || !name) return 'Price on request';
       
@@ -310,26 +288,21 @@ export default function ServiceProvidersScreen() {
         return `₦${item.pricing[searchName]?.toLocaleString()}`;
       }
       
-      // Try with a space at the end (common format in the database)
       if (item.pricing[searchName + ' '] !== undefined) {
         return `₦${item.pricing[searchName + ' ']?.toLocaleString()}`;
       }
       
-      // Look for keys that contain this service name
       const pricingKeys = Object.keys(item.pricing);
       for (const key of pricingKeys) {
         const lowerKey = key.toLowerCase();
-        // Check if this key contains our search term or starts with it
         if (lowerKey.includes(searchName.toLowerCase()) || 
             lowerKey.startsWith(searchName.toLowerCase() + ' -')) {
           return `₦${item.pricing[key]?.toLocaleString()}`;
         }
       }
       
-      // Check for subcategory pricing
       if (searchName.includes(' - ')) {
         const [mainCategory, subCategory] = searchName.split(' - ');
-        // Try to find main category + subcategory match
         for (const key of pricingKeys) {
           if (key.toLowerCase().includes(mainCategory.toLowerCase()) && 
               key.toLowerCase().includes(subCategory.toLowerCase())) {
