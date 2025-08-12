@@ -14,8 +14,8 @@ interface LocationPickerProps {
   state: string;
   lga: string;
   locationText?: string;
-  setState: (value: string) => void;
-  setLga: (value: string) => void;
+  setState?: (value: string) => void; // Made optional for read-only mode
+  setLga?: (value: string) => void; // Made optional for read-only mode
   getLocation: () => void;
   isRetrying?: boolean;
   locationError?: boolean;

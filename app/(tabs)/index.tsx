@@ -15,7 +15,6 @@ import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useUserStore } from '../../store/useUserStore';
 import { Provider } from '../../types';
-import * as Location from 'expo-location';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import BannerSlider from '../../components/BannerSlider';
@@ -27,6 +26,7 @@ import { ServicesSection } from '../../components/user/home/ServicesSection';
 import { HeaderSection } from '../../components/user/home/HeaderSection';
 import { useTheme } from '../../components/ThemeProvider';
 import { Snackbar } from 'react-native-paper';
+import { useLocation } from '../../hooks/useLocation';
 
 const { width } = Dimensions.get('window');
 const isSmallDevice = width < 375;
@@ -47,24 +47,27 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const { profile, updateProfile } = useUserStore();
   const { isDark, colors } = useTheme();
+
+  const {
+    location,
+    locationText,
+    state,
+    lga,
+    locationError,
+    isRetrying,
+    isInitialized: locationInitialized,
+    retryLocation
+  } = useLocation();
+
   const [refreshing, setRefreshing] = useState(false);
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [state, setState] = useState('');
-  const [lga, setLga] = useState('');
-  const [locationText, setLocationText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [locationError, setLocationError] = useState(false);
-  const [isRetrying, setIsRetrying] = useState(false);
   const [page, setPage] = useState(0);
   const [prefetchedProviders, setPrefetchedProviders] = useState<{[key: string]: any}>({});
   const [loadingProviderId, setLoadingProviderId] = useState<string | null>(null);
   const appState = useRef(AppState.currentState);
   const lastActiveTime = useRef<number>(Date.now());
-  
-
-  const locationInitialized = useRef(false);
 
   const isNavigating = useRef(false);
   const isMounted = useRef(true);
@@ -152,243 +155,6 @@ export default function HomeScreen() {
     console.log('Determining displayProviders. Nearby count:', nearbyProviders.length, 'Random count:', randomProviders.length);
     return nearbyProviders.length > 0 ? nearbyProviders : randomProviders;
   }, [nearbyProviders, randomProviders]);
-
-  const getLocation = useCallback(async () => {
-    console.log('getLocation called. isRetrying:', isRetrying);
-    if (isRetrying) return;
-    try {
-      setIsRetrying(true);
-     
-      const locationMainTimeout = setTimeout(() => {
-        if (isMounted.current) {
-          console.warn('Location operation timed out completely');
-          setLocationError(true);
-          setIsRetrying(false);
-    
-          if (!location) {
-            setLocation({
-              coords: {
-                latitude: 0,
-                longitude: 0,
-                altitude: null,
-                accuracy: null,
-                altitudeAccuracy: null,
-                heading: null,
-                speed: null
-              },
-              timestamp: Date.now()
-            });
-            setLocationText('Unknown location');
-            console.log('Location set to Unknown due to timeout.');
-          }
-        }
-      }, 20000); 
-        
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      console.log('Location permission status:', status);
-      if (status !== 'granted') {
-        clearTimeout(locationMainTimeout);
-        if (isMounted.current) {
-          setLocationError(true);
-          setIsRetrying(false);
-          
-          if (!location) {
-            setLocation({
-              coords: {
-                latitude: 0,
-                longitude: 0,
-                altitude: null,
-                accuracy: null,
-                altitudeAccuracy: null,
-                heading: null,
-                speed: null
-              },
-              timestamp: Date.now()
-            });
-            setLocationText('Location access denied');
-            console.log('Location set to Access Denied.');
-          }
-        }
-        return;
-      }
-
-      let position: Location.LocationObject | null = null;
-      
-      try {
-        console.log('Attempting high accuracy location...');
-        position = await Promise.race([
-          Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          }),
-          new Promise<null>((_, reject) => 
-            setTimeout(() => reject(new Error('High accuracy position timeout')), 8000)
-          )
-        ]) as Location.LocationObject;
-        if (position) {
-          console.log('High accuracy location obtained:', position.coords);
-        }
-      } catch (highAccuracyError) {
-        console.warn('High accuracy position failed, trying low accuracy:', highAccuracyError);
-      }
-      
-      if (!position) {
-        try {
-          console.log('Attempting low accuracy location...');
-          position = await Promise.race([
-            Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Low,
-            }),
-            new Promise<null>((_, reject) => 
-              setTimeout(() => reject(new Error('Low accuracy position timeout')), 8000)
-            )
-          ]) as Location.LocationObject;
-          if (position) {
-            console.log('Low accuracy location obtained:', position.coords);
-          }
-        } catch (lowAccuracyError) {
-          console.error('Low accuracy position also failed:', lowAccuracyError);
-          throw new Error('Could not get location after multiple attempts');
-        }
-      }
-      
-      clearTimeout(locationMainTimeout);
-      
-      if (!position) {
-        throw new Error('No position returned but no error thrown');
-      }
-
-      if (isMounted.current) {
-        setLocation(position);
-        setLocationError(false);
-        console.log('Location successfully set:', position.coords);
-      }
-
-      try {
-        const { latitude, longitude } = position.coords;
-        console.log('Attempting reverse geocoding for:', latitude, longitude);
-        try {
-          const addressResult = await Promise.race([
-            Location.reverseGeocodeAsync({ latitude, longitude }),
-            new Promise<null>((_, reject) => 
-              setTimeout(() => reject(new Error('Geocoding timeout')), 5000)
-            )
-          ]) as Location.LocationGeocodedAddress[];
-          
-          if (addressResult && addressResult.length > 0) {
-            const address = addressResult[0];
-            console.log('Geocoding successful. Address:', address);
-            
-            const region = address.region || address.country || 'Unknown';
-            const subregion = address.city || address.subregion || '';
-            const locationString = `${subregion ? subregion + ', ' : ''}${region}`.trim();
-            
-            if (isMounted.current) {
-              setState(region);
-              setLga(subregion);
-              setLocationText(locationString || 'Location found');
-              console.log('Location text set to:', locationString);
-            }
-
-            if (profile?.id) {
-              console.log('Updating location in profile...');
-              updateLocationInProfile(profile.id, {
-                region,
-                subregion,
-                current_address: locationString,
-                coords: { latitude, longitude }
-              });
-            }
-          } else {
-            console.warn('No address found from geocoding.');
-            handleNoAddressFound(position, profile?.id);
-          }
-        } catch (geocodeError) {
-          console.warn('Geocoding failed:', geocodeError);
-          handleNoAddressFound(position, profile?.id);
-        }
-      } catch (error) {
-        console.error('Error processing location:', error);
-        if (isMounted.current) {
-          setLocationText('Location found');
-        }
-      }
-    } catch (error) {
-      console.error('Error getting location (outer catch):', error);
-      if (isMounted.current) {
-        setLocationError(true);
-        
-        if (!location) {
-          setLocation({
-            coords: {
-              latitude: 0,
-              longitude: 0,
-              altitude: null,
-              accuracy: null,
-              altitudeAccuracy: null,
-              heading: null,
-              speed: null
-            },
-            timestamp: Date.now()
-          });
-          setLocationText('Location unavailable');
-          console.log('Location set to Unavailable due to error.');
-        }
-      }
-    } finally {
-      if (isMounted.current) {
-        setIsRetrying(false);
-        locationInitialized.current = true;
-        console.log('getLocation finished. isRetrying:', false, 'locationInitialized:', true);
-      }
-    }
-  }, [profile, updateProfile, isRetrying, location]);
-
-  const updateLocationInProfile = useCallback(async (userId: string, locationData: any) => {
-    console.log('updateLocationInProfile called for userId:', userId, 'with data:', locationData);
-    try {
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ location: locationData })
-        .eq('id', userId);
-        
-      if (updateError) {
-        console.error('Failed to update location in profile:', updateError);
-      } else if (isMounted.current && profile) {
-        console.log('Profile location updated successfully in store.');
-        updateProfile({
-          ...profile,
-          // @ts-ignore - ignoring TypeScript
-          location: locationData
-        });
-      }
-    } catch (dbError) {
-      console.error('Database error updating location:', dbError);
-    }
-  }, [profile, updateProfile]);
-
-  const handleNoAddressFound = useCallback((position: Location.LocationObject, userId?: string) => {
-    console.log('handleNoAddressFound called. Position:', position.coords);
-    const { latitude, longitude } = position.coords;
-    const locationString = 'Location found';
-    
-    if (isMounted.current) {
-      setState('Unknown region');
-      setLga('');
-      setLocationText(locationString);
-      console.log('No address found, location text set to:', locationString);
-    }
-    
-    if (userId) {
-      const locationObject = {
-        region: 'Unknown region',
-        subregion: '',
-        current_address: locationString,
-        coords: { latitude, longitude }
-      };
-      
-      updateLocationInProfile(userId, locationObject);
-    }
-  }, [updateLocationInProfile]);
 
   const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; 
@@ -520,14 +286,12 @@ export default function HomeScreen() {
         }
 
         const enhanceWithReviews = async () => {
-          console.log('Starting review enhancement...');
           try {
             const enhancedWithReviews = await Promise.all(
               enhancedProviders.map(async (provider) => {
                 const userId = provider.users?.id;
                 
                 if (!userId) {
-                  console.log('Skipping review fetch for provider without userId:', provider.id);
                   return provider;
                 }
                 
@@ -538,7 +302,6 @@ export default function HomeScreen() {
                     .eq('provider_id', userId);
                     
                   if (reviewsError) {
-                    console.warn(`Error fetching reviews for provider ${userId}:`, reviewsError);
                     return provider;
                   }
                   
@@ -547,7 +310,6 @@ export default function HomeScreen() {
                     const sum = reviewsData.reduce((acc, review) => acc + review.rating, 0);
                     averageRating = Number((sum / reviewsData.length).toFixed(1));
                   }
-                  // console.log(`Reviews for ${userId}:`, reviewsData, `Avg Rating: ${averageRating}`);
                     
                   return {
                     ...provider,
@@ -555,12 +317,10 @@ export default function HomeScreen() {
                     reviews: reviewsData || []
                   };
                 } catch (reviewError) {
-                  console.warn(`Error fetching reviews for provider ${userId}:`, reviewError);
                   return provider;
                 }
               })
             );
-            console.log('Reviews enhancement completed. Re-sorting providers...');
             const sortedWithReviews = location?.coords 
               ? enhancedWithReviews.sort((a, b) => {
                   if (a.distance === null && b.distance === null) return 0;
@@ -572,17 +332,14 @@ export default function HomeScreen() {
 
             if (isMounted.current) {
               setProviders(sortedWithReviews);
-              console.log('setProviders called with review-enhanced and sorted data. Count:', sortedWithReviews.length);
             }
           } catch (reviewsError) {
-            console.warn('Error enhancing providers with reviews (outer catch):', reviewsError);
           }
         };
         
         enhanceWithReviews();
         
       } catch (processingError) {
-          console.error('Error processing provider data:', processingError);
         if (data && data.length > 0 && isMounted.current) {
           const basicProviders = data.map(provider => ({
             ...provider,
@@ -590,17 +347,14 @@ export default function HomeScreen() {
             reviews: []
           }));
           setProviders(basicProviders);
-          console.log('Processing error, falling back to basic providers. Count:', basicProviders.length);
         }
       } finally {
         clearTimeout(fetchTimeoutId);
         if (isMounted.current) {
           setLoading(false);
-          console.log('setLoading(false) in fetchProviders finally block.');
         }
       }
     } catch (error) {
-      console.error('Unexpected error fetching providers (main catch):', error);
       if (isMounted.current) {
         setLoading(false);
         setProviders(prev => {
@@ -744,56 +498,16 @@ export default function HomeScreen() {
     }
   }, [loading, refreshing, page, profile?.id, location, calculateDistance, searchQuery, nearbyProviders.length]);
 
-  // Initialize data
   useEffect(() => {
     console.log('Main useEffect for data initialization. Profile ID:', profile?.id);
-    if (profile?.id) {
-      console.log('Calling fetchProviders from main useEffect.');
-      fetchProviders();
-      
-      if (!locationInitialized.current) {
-        console.log('Location not initialized, checking saved location in profile...');
-        try {
-          const userLocation = (profile as any).location;
-          
-          if (userLocation?.coords?.latitude && userLocation?.coords?.longitude) {
-            const savedLocation = {
-              coords: {
-                latitude: userLocation.coords.latitude,
-                longitude: userLocation.coords.longitude,
-                altitude: null,
-                accuracy: null,
-                altitudeAccuracy: null,
-                heading: null,
-                speed: null
-              },
-              timestamp: Date.now()
-            } as Location.LocationObject;
-            
-            setLocation(savedLocation);
-            setState(userLocation.region || '');
-            setLga(userLocation.subregion || '');
-            setLocationText(userLocation.current_address || '');
-            setLocationError(false);
-            locationInitialized.current = true;
-            console.log('Location loaded from profile:', savedLocation.coords);
-          } else {
-            console.log('No saved location in profile, calling getLocation().');
-            getLocation();
-          }
-        } catch (error) {
-          console.error('Error loading location from profile:', error);
-          console.log('Calling getLocation() after profile location error.');
-          getLocation();
-        }
-      }
-    }
-  }, [profile?.id, fetchProviders, getLocation]);
+    if (!profile?.id) return;
+
+    console.log('Calling fetchProviders from main useEffect.');
+    fetchProviders();
+  }, [profile?.id]); 
 
   useEffect(() => {
-    console.log('AppState change listener setup.');
     const subscription = AppState.addEventListener('change', nextAppState => {
-      console.log('AppState changed from', appState.current, 'to', nextAppState);
       if (
         (appState.current === 'background' || appState.current === 'inactive') &&
         nextAppState === 'active'
@@ -803,7 +517,6 @@ export default function HomeScreen() {
         const fiveMinutesInMs = 5 * 60 * 1000;
         
         if (timeInBackground > fiveMinutesInMs) {
-          console.log('App was inactive for more than 5 minutes, refreshing provider data only...');
           
           if (isMounted.current) {
             setLoading(true);
@@ -878,8 +591,7 @@ export default function HomeScreen() {
         if (isMounted.current) {
           setLoading(false);
           setRefreshing(false);
-          setIsRetrying(false);
-          console.log('useFocusEffect cleanup: Loading, Refreshing, Retrying set to false.');
+          console.log('useFocusEffect cleanup: Loading, Refreshing set to false.');
         }
       };
     }, [])
@@ -964,9 +676,10 @@ export default function HomeScreen() {
       console.log('Calling fetchProviders from onRefresh.');
       await fetchProviders();
       
-      if (!location?.coords || locationError) {
-        console.log('Location not available or error, calling getLocation() from onRefresh.');
-        await getLocation();
+      // Only retry location if it's not initialized and there's an error
+      if (!locationInitialized && locationError) {
+        console.log('Location not initialized and has error, retrying location.');
+        await retryLocation();
       }
       
       clearTimeout(refreshTimeoutId);
@@ -989,7 +702,7 @@ export default function HomeScreen() {
         console.log('setRefreshing(false) in onRefresh finally block.');
       }
     }
-  }, [refreshing, fetchProviders, getLocation, location, locationError]);
+  }, [refreshing, fetchProviders, retryLocation, locationError, locationInitialized]);
 
   const shouldRenderProviderView = profile?.role === 'provider';
 
@@ -1002,21 +715,6 @@ export default function HomeScreen() {
     />
   ), [profile, onRefresh, refreshing]);
 
-  const retryLocation = useCallback(async () => {
-    console.log('retryLocation called. isRetrying:', isRetrying);
-    if (isRetrying) return;
-    
-    setIsRetrying(true);
-    try {
-      await getLocation();
-      console.log('getLocation called from retryLocation.');
-    } finally {
-      if (isMounted.current) {
-        setIsRetrying(false);
-        console.log('setIsRetrying(false) in retryLocation finally block.');
-      }
-    }
-  }, [getLocation, isRetrying]);
 
   const handleServicePress = useCallback((serviceName: string) => {
     console.log('handleServicePress called for:', serviceName);
@@ -1086,8 +784,8 @@ export default function HomeScreen() {
         state={state}
         lga={lga}
         locationText={locationText}
-        setState={setState}
-        setLga={setLga}
+        setState={() => {}}
+        setLga={() => {}}
         getLocation={retryLocation}
         isRetrying={isRetrying}
         locationError={locationError}
@@ -1117,9 +815,7 @@ export default function HomeScreen() {
     console.log('resetAppState called.');
     if (isMounted.current) {
       setLoading(true);
-      setLocationError(false);
       setProviders([]);
-      setIsRetrying(false);
       setPrefetchedProviders({});
       setPage(0);
 
@@ -1139,15 +835,12 @@ export default function HomeScreen() {
             setSnackbarVisible(true);
           }
           
-          console.log('Calling getLocation and fetchProviders after app state reset.');
-          getLocation();
+          retryLocation();
           fetchProviders();
         }
       }, 300);
     }
-  }, [getLocation, fetchProviders]);
-
-  console.log('HomeScreen render. Loading:', loading, 'Refreshing:', refreshing, 'Providers count:', providers.length, 'Display Providers count:', displayProviders.length);
+  }, [retryLocation, fetchProviders]);
 
   return (
     <SafeAreaView style={[
